@@ -16,6 +16,79 @@ typedef struct
 #define CHROMA_422          2
 #define CHROMA_444          3
 
+enum input_file_type_list {
+    INPUT_FILE_TYPE_UNDEFINED = 0,
+    INPUT_FILE_TYPE_YUV,       // raw
+    INPUT_FILE_TYPE_TIFF,
+    INPUT_FILE_TYPE_EXR,
+    INPUT_FILE_TYPE_Y4M,
+    INPUT_FILE_TYPE_DPX,
+    INPUT_FILE_TYPE_LAST,
+};
+
+enum output_file_type_list {
+    OUTPUT_FILE_TYPE_UNDEFINED = 0,
+    OUTPUT_FILE_TYPE_YUV,       // raw
+    OUTPUT_FILE_TYPE_TIFF,
+    OUTPUT_FILE_TYPE_EXR,
+    OUTPUT_FILE_TYPE_Y4M,
+    OUTPUT_FILE_TYPE_DPX,
+    OUTPUT_FILE_TYPE_LAST,
+};
+
+struct type_info_t
+{
+    int idx;
+    const char *name;
+    int is_supported;
+} ;
+
+static struct type_info_t input_file_types[] =
+{
+    { INPUT_FILE_TYPE_UNDEFINED, "UNDEFINED", 0 },
+    { INPUT_FILE_TYPE_YUV, "yuv", 0 },
+    { INPUT_FILE_TYPE_TIFF, "tiff", 1 },
+    { INPUT_FILE_TYPE_EXR, "exr", 1 },
+    { INPUT_FILE_TYPE_Y4M, "y4m", 0 },
+    { INPUT_FILE_TYPE_DPX, "dpx", 1 }
+};
+
+static struct type_info_t output_file_types[] =
+{
+    { OUTPUT_FILE_TYPE_UNDEFINED, "UNDEFINED", 0 },
+    { OUTPUT_FILE_TYPE_YUV, "yuv", 1 },
+    { OUTPUT_FILE_TYPE_TIFF, "tiff", 0 },
+    { OUTPUT_FILE_TYPE_EXR, "exr", 1 },
+    { OUTPUT_FILE_TYPE_Y4M, "y4m", 0 },
+    { OUTPUT_FILE_TYPE_DPX, "dpx", 1 }
+};
+
+
+
+
+#if 0
+struct option
+{
+    const char *name;
+    int has_arg;
+    int *flag;
+    int val;
+};
+
+#define     no_arg          1
+#define     required_arg    2
+#define     optional_arg    3
+
+
+static struct option long_options[] =
+{
+    {"help", 0, "", 'h' },
+};
+
+
+};
+#endif
+
 const chroma_format_t chroma_format_list[] = {
     { "mono",    1, 1, 1 },
     { "yuv420p", 3, 2, 2  },
@@ -52,32 +125,66 @@ enum  color_primaries_list {
 
 enum  transfer_characteristics_list {
     TRANSFER_RESERVED0 = 0,
-    TRANSFER_BT709 = 1,
-    TRANSFER_BT1361 = 1,
-    TRANSFER_UNSPECIFIED = 2,
-    TRANSFER_RESERVED3 = 3,
-    TRANSFER_BT470M = 4,
-    TRANSFER_BT1700_PAL_SECAM = 4,
+    TRANSFER_BT709,
+ //   TRANSFER_BT1361 = 1,
+    TRANSFER_UNSPECIFIED,
+    TRANSFER_RESERVED3,
+    TRANSFER_BT470M,
+//    TRANSFER_BT1700_PAL_SECAM = 4,
     TRANSFER_BT470BG = 5,
     TRANSFER_BT601 = 6,
-    TRANSFER_BT1358 = 6,
-    TRANSFER_SMPTE170M = 6,
-    TRANSFER_BT1700_NTSC = 6,
-    TRANSFER_SMPTE240M = 7,
-    TRANSFER_LINEAR = 8,
-    TRANSFER_LOG1 = 9,
-    TRANSFER_LOG2 = 10,
-    TRANSFER_IEC61966_2_4 =11,
-    TRANSFER_BT1361_EXTENDED_GAMUT = 12,
+//    TRANSFER_BT1358 = 6,
+//    TRANSFER_SMPTE170M = 6,
+//    TRANSFER_BT1700_NTSC = 6,
+    TRANSFER_SMPTE240M,
+    TRANSFER_LINEAR,
+    TRANSFER_LOG1,
+    TRANSFER_LOG2,
+    TRANSFER_IEC61966_2_4,
+//    TRANSFER_BT1361_EXTENDED_GAMUT,
     TRANSFER_XVYCC = 12,
-    TRANSFER_IEC61966_2_1 = 13,
-    TRANSFER_SRGB = 13,
-    TRANSFER_YCC = 13,
-    TRANSFER_BT2020_10bit = 14,
-    TRANSFER_BT2020_12bit = 15,
-    TRANSFER_PQ = 16,
-    TRANSFER_SMPTE428 = 17,
-    TRANSFER_DCI = 17,
+//    TRANSFER_IEC61966_2_1 = 13,
+    TRANSFER_SRGB,
+//    TRANSFER_YCC = 13,
+    TRANSFER_BT2020_10bit,
+    TRANSFER_BT2020_12bit,
+    TRANSFER_PQ,
+    TRANSFER_SMPTE428,
+//    TRANSFER_DCI = 17,
+    
+    TRANSFER_RHO_GAMMA,
+};
+
+static struct type_info_t transfer_types_table[] =
+{
+    { TRANSFER_RESERVED0, "RESERVED0", 0 },
+    { TRANSFER_BT709, "BT709", 1 },
+//    { TRANSFER_BT1361, "BT1361", 0 },
+    { TRANSFER_UNSPECIFIED, "UNSPECIFIED", 0 },
+    { TRANSFER_RESERVED3, "RESERVED3", 0 },
+    { TRANSFER_BT470M, "BT470M", 0 },
+//    { TRANSFER_BT1700_PAL_SECAM, "BT1700_PAL_SECAM", 0 },
+    { TRANSFER_BT470BG, "BT470BG", 0 },
+    { TRANSFER_BT601, "BT601", 1 },
+//    { TRANSFER_BT1358, "BT1358", 0 },
+ //   { TRANSFER_SMPTE170M, "SMPTE170M", 0 },
+ //   { TRANSFER_BT1700_NTSC, "BT1700_NTSC", 0 },
+    { TRANSFER_SMPTE240M, "SMPTE240M", 0 },
+    { TRANSFER_LINEAR, "LINEAR", 1 },
+    { TRANSFER_LOG1, "LOG1", 0 },
+    { TRANSFER_LOG2, "LOG2", 0 },
+    { TRANSFER_IEC61966_2_4, "IEC61966_2_4", 0 },
+//    { TRANSFER_BT1361_EXTENDED_GAMUT, "BT1361_EXTENDED_GAMUT", 0 },
+    { TRANSFER_XVYCC, "XVYCC", 0 },
+//    { TRANSFER_IEC61966_2_1, "IEC61966_2_1", 0 },
+    { TRANSFER_SRGB, "SRGB", 0 },
+//    { TRANSFER_YCC, "YCC", 0 },
+    { TRANSFER_BT2020_10bit, "BT2020_10bit", 0 },
+    { TRANSFER_BT2020_12bit, "BT2020_12bit", 0 },
+    { TRANSFER_PQ, "PQ", 1 },
+    { TRANSFER_SMPTE428, "SMPTE428", 0 },
+ //   { TRANSFER_DCI, "DCI", 0 },
+    { TRANSFER_RHO_GAMMA, "RHO_GAMMA", 1 },
 };
 
 enum matrix_list {
@@ -258,7 +365,8 @@ typedef struct
     
     // SMPTE 2050 types
     
-    
+    int input_file_type;
+    int output_file_type;
     
 } t_user_args;
 
@@ -286,9 +394,13 @@ typedef struct
 } t_psnr;
 
 
+#define PIC_TYPE_U16    1
+#define PIC_TYPE_FLOAT  2
 
 typedef struct
 {
+    int init;
+    
     int width;
     int height;
     
@@ -301,7 +413,12 @@ typedef struct
     int bit_depth;
     int video_full_range_flag;
 
+    int pic_buffer_type;
+    int half_float_flag;
     unsigned short *buf[3];
+    float *fbuf[3];
+    
+    const char *name;
  
 } t_pic;
 
@@ -322,11 +439,25 @@ typedef struct
 } t_hdr;
 
 
-void exr_test( char *fn );
+//void exr_test( char *fn );
 
-int convert(  t_hdr *h );
-int write_tiff(  char *filename, t_hdr *h );
+// exr.cpp
+void read_exr( t_pic *dst_pic, char *filename );
+int write_exr_file( char *filename, int pic_width, int pic_height, int half_float_flag, t_pic *src_pic );
+
+// convert.cpp
+int convert( t_pic *out_pic, t_hdr *h, t_pic *in_pic );
+int write_yuv(  char *filename, t_hdr *h, t_pic *in_pic );
 int matrix_convert( t_pic *out_pic, t_hdr *h, t_pic *in_pic );
+
+// tiff.cpp
 int read_tiff( t_pic *tif_pic, t_hdr *h, char* filename );
 
+// dpx.cpp
+void dpx_write_float(char *outname, float *pixel_result, short width, short height);
+void dpx_read (char *inname, float *pixels_read, short *width, short *height, short cineon, short half_flag);
+void dpx_write_10bit_from_float(char *outname, float *pixel_result, short width, short height);
 
+// common.cpp
+int planar_float_to_muxed_dpx_buf( float *dst, int width, int height, t_pic *src );
+int muxed_dpx_to_planar_float_buf( t_pic *dst, int width, int height, float *src );
