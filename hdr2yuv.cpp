@@ -11,6 +11,48 @@
 #include <stdexcept>
 
 
+
+static inline char *get_filename_extension( char *filename )
+{
+    char *ext = filename + strlen( filename );
+    while( *ext != '.' && ext > filename )
+        ext--;
+    ext += *ext == '.';
+    return ext;
+}
+
+void print_help( void )
+{
+    int n = sizeof( transfer_types_table ) / sizeof( transfer_types_table[0]);
+    
+    printf("Transfer chracteristics options:\n");
+    
+    for(int idx=0; idx<n; idx++ )
+    {
+        printf("%d: %s %s\n" ,idx, transfer_types_table[idx].name,
+            transfer_types_table[idx].is_supported?  "(SUPPORTED)" : "(NOT SUPPORTED)");
+    }
+
+    n = sizeof( input_file_types ) / sizeof( input_file_types[0]);
+            
+    printf("input file types:\n");
+    
+    for(int idx=0; idx<n; idx++ )
+    {
+        printf("%d: %s %s\n", idx, input_file_types[idx].name,
+            input_file_types[ idx].is_supported?  "(SUPPORTED)" : "(NOT SUPPORTED)");
+    }
+    
+    printf("output file types:\n");
+               
+    for(int idx=0; idx<n; idx++ )
+    {
+        printf("%d: %s %s\n" ,idx, output_file_types[idx].name,
+            output_file_types[ idx].is_supported?  "(SUPPORTED)" : "(NOT SUPPORTED)");
+    }
+    
+}
+
 int parse_options( t_user_args *par, int argc,  char *argv[] )
 {
 //    t_user_args *par = &(h->args);
@@ -43,12 +85,20 @@ int parse_options( t_user_args *par, int argc,  char *argv[] )
     par->src_filename = NULL;
     par->dst_filename = NULL;
     
+    par->input_file_type = INPUT_FILE_TYPE_UNDEFINED;
+    par->output_file_type = OUTPUT_FILE_TYPE_UNDEFINED;
+    // TODO: use C++ map 
     for( int i=1; i < argc; i++)
     {
         if( !strcmp( argv[i], "--src_filename") && (i<argc) )
         {
             par->src_filename = argv[i+1];
+            
             i++;
+        }
+        if( !strcmp( argv[i], "--help") && (i<argc) )
+        {
+            print_help();
         }
         else if( !strcmp( argv[i], "--dst_filename") && (i<argc) )
         {
@@ -120,6 +170,46 @@ int parse_options( t_user_args *par, int argc,  char *argv[] )
             par->dst_matrix_coeffs = atoi( argv[i+1] );
             i++;
         }
+        else if( !strcmp( argv[i], "--src_transfer_characteristics") && (i < argc) )
+        {
+            char *val = argv[i+1];
+            int val_int;
+            
+            if( sscanf(val, "%d", &val_int) != 0 )
+                par->src_transfer_characteristics = val_int;
+            {
+                int n = sizeof( transfer_types_table ) / sizeof( transfer_types_table[0]);
+                
+                // wish there was content-addressible tables in C
+                for(int idx=0; idx<n; idx++ )
+                {
+                    if( !strcasecmp( val, transfer_types_table[i].name ))
+                        par->src_transfer_characteristics = transfer_types_table[i].idx;
+                }
+            }
+            
+            i++;
+        }
+        else if( !strcmp( argv[i], "--dst_transfer_characteristics") && (i < argc) )
+        {
+            char *val = argv[i+1];
+            int val_int;
+            
+            if( sscanf(val, "%d", &val_int) != 0 )
+                par->dst_transfer_characteristics = val_int;
+            {
+                int n = sizeof( transfer_types_table ) / sizeof( transfer_types_table[0]);
+                
+                // wish there was content-addressible tables in C
+                for(int idx=0; idx<n; idx++ )
+                {
+                    if( !strcasecmp( val, transfer_types_table[i].name ))
+                        par->dst_transfer_characteristics = transfer_types_table[i].idx;
+                }
+            }
+            
+            i++;
+        }
         else if( !strcmp( argv[i], "--alpha_channel") && (i < argc) )
         {
             par->alpha_channel = atoi( argv[i+1] );
@@ -155,23 +245,72 @@ int parse_options( t_user_args *par, int argc,  char *argv[] )
         
     }
     
+
+    // beginning of sanity checks..
+    
+    int arg_errors =0;
+
+    char *ext = get_filename_extension( par->src_filename );
+    
+    for(int i=0; i<INPUT_FILE_TYPE_LAST; i++ )
+    {
+        if( !strcasecmp( ext, input_file_types[i].name ))
+            par->input_file_type = input_file_types[i].idx;
+    }
     
     
+    if( input_file_types[ par->input_file_type].is_supported != 1 )
+    {
+        printf("WARNING: input file (%s) type extension (%s) idx(%d) is either not recongized or not supported\n", par->src_filename, ext,  par->input_file_type );
+        arg_errors++;
+    }
+    
+    
+    
+    
+    ext = get_filename_extension( par->dst_filename );
+    
+    for(int i=0; i<OUTPUT_FILE_TYPE_LAST; i++ )
+    {
+        if( !strcasecmp( ext, output_file_types[i].name ))
+            par->output_file_type = output_file_types[i].idx;
+    }
+    
+    
+    if( output_file_types[ par->output_file_type].is_supported != 1 )
+    {
+        printf("WARNING: output file (%s) type extension (%s) idx(%d) is either not recongized or not supported\n", par->dst_filename, ext, par->output_file_type );
+        arg_errors++;
+    }
+    
+    
+    
+    
+    //printf(")
     printf("src_pic_width: %d\n",       par->src_pic_width );
     printf("src_pic_height: %d\n",      par->src_pic_height );
     printf("src_bit_depth: %d\n",       par->src_bit_depth );
     printf("src_chroma_format_idc: %d\n",   par->src_chroma_format_idc);
-    printf("src_filename: %s\n",    par->src_filename);
+    printf("src_filename: %s (type: %s) %s\n",    par->src_filename, input_file_types[ par->input_file_type].name, input_file_types[ par->input_file_type].is_supported?  "(SUPPORTED)" : "(NOT SUPPORTED)"  );
+    printf("dst_filename: %s (type: %s) %s\n",    par->dst_filename, output_file_types[ par->output_file_type].name, output_file_types[ par->output_file_type].is_supported ?  "(SUPPORTED)" :  "(NOT SUPPORTED)"   );
+    
     printf("dst_pic_width: %d\n",       par->dst_pic_width );
     printf("dst_pic_height: %d\n",      par->dst_pic_height );
     printf("dst_bit_depth: %d\n",       par->dst_bit_depth );
     printf("dst_chroma_format_idc: %d\n",   par->dst_chroma_format_idc );
-    printf("dst_filename: %s\n",    par->dst_filename);
+
+    printf("dst_transfer_characteristics: %d (type: %s) %s\n",
+           par->dst_transfer_characteristics,
+           transfer_types_table[ par->dst_transfer_characteristics].name, transfer_types_table[ par->dst_transfer_characteristics].is_supported?  "(SUPPORTED)" : "(NOT SUPPORTED)"  );
+    
+    printf("src_transfer_characteristics: %d (type: %s) %s\n",
+           par->src_transfer_characteristics,
+           transfer_types_table[ par->src_transfer_characteristics].name, transfer_types_table[ par->src_transfer_characteristics].is_supported?  "(SUPPORTED)" : "(NOT SUPPORTED)"  );
+    
     printf("verbose_level: %d\n",   par->verbose_level );
     printf("src_start_frame: %d\n", par->src_start_frame);
     printf("n_frames: %d\n",        par->n_frames);
     
-    int arg_errors =0;
     
     if( par->src_pic_width < 2 || par->src_pic_width > 10000 ){
         printf("WARNING: pic_width(%d) outside range [0,10000]\n", par->src_pic_width );
@@ -194,10 +333,6 @@ int parse_options( t_user_args *par, int argc,  char *argv[] )
         arg_errors++;
     }
     
-    if( par->src_filename == NULL ){
-        printf("WARNING: src_filename not specified\n" );
-        arg_errors++;
-    }
 
     if( par->dst_pic_width < 2 || par->dst_pic_width > 10000 ){
         printf("WARNING: pic_width(%d) outside range [0,10000]\n", par->dst_pic_width );
@@ -220,20 +355,119 @@ int parse_options( t_user_args *par, int argc,  char *argv[] )
         arg_errors++;
     }
     
-    if( par->dst_filename == NULL ){
-        printf("WARNING: src_filename not specified\n" );
-        arg_errors++;
-    }
 
     
     if( arg_errors != 0 ){
-        printf("TOO MANY ARGUMENT ERRORS. ABORTING PROGRAM");
+        printf("TOO MANY ARGUMENT ERRORS. ABORTING PROGRAM\n\n");
+        exit(0);
     }
     
     return(0);
     
 }
 
+// TODO: add all the t_pic attributes to the command line input
+
+int init_pic( t_pic *pic, int width, int height, int chroma_format_idc, int sample_type, int half_float_flag, int verbose_level, const char *name )
+{
+    pic->width = width;
+    pic->height = height;
+    pic->pic_buffer_type = sample_type;
+    pic->chroma_format_idc = chroma_format_idc;
+    pic->name = name;
+    
+    if( verbose_level > 2 )
+        printf("intializing picture (%s):  w(%d) h(%d) type(%d: %s) chroma_format_idc(%d)\n",
+               name, width, height, sample_type, sample_type == PIC_TYPE_FLOAT ? "FLOAT" : "U16", chroma_format_idc );
+    
+    if( width < 1 || width > 10000 || height < 1 || height > 10000 )
+        printf("init_pic() ERROR: picture dimensions( %d x %d) out of bounds\n ", width, height );
+    
+    if( sample_type == PIC_TYPE_U16 )
+    {
+        int size = width * height * sizeof(unsigned short);
+    
+        pic->buf[0] = (unsigned short*) malloc(size);
+        pic->buf[1] = (unsigned short*) malloc(size);
+        pic->buf[2] = (unsigned short*) malloc(size);
+
+        pic->init = 1;
+        pic->pic_buffer_type = PIC_TYPE_U16;
+    }
+    else if( sample_type == PIC_TYPE_FLOAT )
+    {
+        int size = width * height * sizeof(float);
+        printf("allocating %d bytes to fbuf\n", size);
+        
+        pic->fbuf[0] = (float*) malloc(size);
+        pic->fbuf[1] = (float*) malloc(size);
+        pic->fbuf[2] = (float*) malloc(size);
+        
+        pic->init = 1;
+        pic->pic_buffer_type = PIC_TYPE_FLOAT;
+        
+    }
+    else
+    {
+        pic->init = 0;
+
+        printf("ERROR: init_pic(): sample_type(%d) not recognized. Exiting program\n", sample_type );
+        exit(0);
+    }
+    
+    return(0);
+}
+
+int deinit_pic( t_pic *pic )
+{
+    int errors= 0;
+    
+    if( pic->init )
+    {
+        if( pic->pic_buffer_type == PIC_TYPE_U16 )
+        {
+            for( int cc = 0; cc < 3; cc++ )
+            {
+                if( pic->buf[cc] ){
+                    free( pic->buf[cc] );
+                }
+                else
+                {
+                    printf("WARNING: deinit_pic(%s) buf[%d] active but NULL\n", pic->name, cc );
+                    errors++;
+                }
+            }
+        }
+        else if( pic->pic_buffer_type == PIC_TYPE_FLOAT )
+        {
+            for( int cc = 0; cc < 3; cc++ )
+            {
+                if( pic->fbuf[cc] ){
+                    free( pic->fbuf[cc] );
+                }
+            	else
+                {
+                    printf("WARNING: deinit_pic(%s) fbuf[%d] active but NULL\n", pic->name, cc );
+                    errors++;
+                }
+            }
+    
+        }
+        else
+        {
+            printf("WARNING: deinit_pic(%s) pic_buffer_type(%d) not recognized\n", pic->name, pic->pic_buffer_type );
+                errors++;
+        }
+        
+    }
+    
+    return( errors );
+    
+}
+
+// TODO: y4m, hist, write openxr,  psnr, check video range, ...
+
+// TODO: move init_pic() into common.   Make all read routines (read_exr, read_tiff, etc.) use it
 
 
 int main (int argc, char *argv[])
@@ -248,6 +482,8 @@ int main (int argc, char *argv[])
     h.maxCV = 65535;
     h.Half = 32768; // e.g half value 12 bits would have been 2048
  
+    h.in_pic.init = 0;
+    h.out_pic.init = 0;
     
     
     // Set up for video range if needed
@@ -267,18 +503,189 @@ int main (int argc, char *argv[])
     
     try
     {
-        exr_test((char *)"Market3_1920x1080p_50_hf_709_00000.exr");
-
+        t_pic exr_pic;
         t_pic tif_pic;
         
-        read_tiff( &tif_pic, &h, ua->src_filename );
-        matrix_convert( &(h.in_pic), &h, &tif_pic );
+        exr_pic.init = 0;
+        tif_pic.init = 0;
         
-        convert( &h );
+        int pic_width, pic_height;
 
+        exr_pic.pic_buffer_type = PIC_TYPE_FLOAT;
+        tif_pic.pic_buffer_type = PIC_TYPE_U16;
         
-        write_tiff( ua->dst_filename, &h );
+       // exr_test((char *)"Market3_1920x1080p_50_hf_709_00000.exr");
+        //       exr_test( &exr_pic, (char *)"Seine_1920x1080p_25_hf_709_00000_rrtd_tmp.exr" );
+        if( ua->input_file_type == INPUT_FILE_TYPE_DPX )
+        {
+            float *tmp_dpx_pic;
+            short dpx_width, dpx_height;
+            short cineon = 0;
+            short half_flag = 0;
+            
 
+            dpx_read ( ua->src_filename, tmp_dpx_pic, &dpx_width, &dpx_height, cineon, half_flag);
+ 
+            
+
+#if 0
+            dst_pic->bit_depth = 32;
+            dst_pic->chroma_sample_loc_type = 0;
+            dst_pic->transfer_characteristics = TRANSFER_LINEAR;
+            dst_pic->colour_primaries = COLOR_PRIMARY_BT709;
+            dst_pic->video_full_range_flag = 1;
+            dst_pic->matrix_coeffs = MATRIX_GBR;
+#endif
+            
+            pic_width = dpx_width;
+            pic_height = dpx_height;
+
+            printf("read dpx file: width(%d) height(%d)\n", pic_width, pic_height );
+            
+            init_pic( &exr_pic, pic_width, pic_height, CHROMA_444, PIC_TYPE_FLOAT, half_flag, ua->verbose_level, "exr_pic from dpx" );
+
+            // int muxed_dpx_to_planar_float_buf( t_pic *dst, int width, int height, float *src )
+            if( ua->verbose_level > 0 )
+                printf("muxed_dpx_to_planar_float_buf\n");
+            
+            muxed_dpx_to_planar_float_buf( &exr_pic, pic_width, pic_height, tmp_dpx_pic );
+
+
+      
+            
+            
+            init_pic( &(h.in_pic), exr_pic.width, exr_pic.height, CHROMA_444, PIC_TYPE_FLOAT, half_flag, ua->verbose_level, "in_pic from dpx" );
+       
+       //     if( ua->output_file_type != OUTPUT_FILE_TYPE_EXR )
+            {
+                if( ua->verbose_level > 0 )
+                    printf("matrix_convert\n");
+                
+                matrix_convert( &(h.in_pic), &h, &exr_pic );
+            }
+            
+          //  free( tmp_dpx_pic );
+           
+       }
+       else if( ua->input_file_type == INPUT_FILE_TYPE_EXR )
+       {
+           int half_flag = 0;  // internal processing always 32-bits
+           
+            read_exr( &exr_pic, ua->src_filename );
+
+           
+           float *tmp_dpx_pic = (float *) malloc( 3 * exr_pic.width * exr_pic.height * sizeof( float ) );
+           
+           planar_float_to_muxed_dpx_buf( tmp_dpx_pic, exr_pic.width, exr_pic.height, &exr_pic );
+           
+           //#if 0
+           dpx_write_float( ua->dst_filename, tmp_dpx_pic, exr_pic.width,  exr_pic.height);
+           free( tmp_dpx_pic );
+           
+           
+           
+           
+           pic_width = exr_pic.width;
+           pic_height = exr_pic.height;
+           
+            init_pic( &(h.in_pic), exr_pic.width, exr_pic.height, CHROMA_444, PIC_TYPE_FLOAT, half_flag, ua->verbose_level, "in_pic" );
+           
+       
+           matrix_convert( &(h.in_pic), &h, &exr_pic );
+ 
+        } else if( ua->input_file_type == INPUT_FILE_TYPE_TIFF ){
+            read_tiff( &tif_pic, &h, ua->src_filename );
+            
+            pic_width = tif_pic.width;
+            pic_height = tif_pic.height;
+
+            init_pic( &(h.in_pic), tif_pic.width, tif_pic.height, CHROMA_444, PIC_TYPE_U16, 0, ua->verbose_level, "in_pic" );
+            matrix_convert( &(h.in_pic), &h, &tif_pic );
+        }
+        
+        if( ua->dst_filename != NULL ){
+            
+            int dst_type, dst_chroma;
+            
+            if( ua->output_file_type == OUTPUT_FILE_TYPE_DPX || ua->output_file_type == OUTPUT_FILE_TYPE_EXR )
+            {
+                dst_type = PIC_TYPE_FLOAT;
+                dst_chroma = CHROMA_444;
+            }
+            else
+            {
+                dst_type = PIC_TYPE_U16;
+                dst_chroma = CHROMA_420;
+            }
+            
+            init_pic( &(h.out_pic), pic_width, pic_height, dst_chroma, dst_type, 0, ua->verbose_level, "out_pic" );
+        
+            int should_convert = 0;
+            
+            if( h.out_pic.chroma_format_idc !=  h.in_pic.chroma_format_idc )
+            {
+                printf("convert() because chroma format dst(%d) != src(%d) ", h.out_pic.chroma_format_idc, h.in_pic.chroma_format_idc);
+                should_convert++;
+            }
+            
+            if( h.out_pic.width !=  h.in_pic.width )
+            {
+                printf("convert() because width dst(%d) != src(%d) ",  h.out_pic.width ,  h.in_pic.width );
+                should_convert++;
+            }
+            
+            if( h.out_pic.height !=  h.in_pic.height )
+            {
+                printf("convert() because height dst(%d) != src(%d) ",  h.out_pic.height , h.in_pic.height );
+                should_convert++;
+            }
+ 
+            printf("converting: %d\n", should_convert );
+
+            if( should_convert != 0 )
+                convert( &(h.out_pic), &h, &(h.in_pic) );
+            else if( h.out_pic.pic_buffer_type == PIC_TYPE_FLOAT && h.in_pic.pic_buffer_type == PIC_TYPE_FLOAT
+                    && h.out_pic.chroma_format_idc  == CHROMA_444 &&  h.in_pic.chroma_format_idc  == CHROMA_444)
+            {
+                dst_type = PIC_TYPE_FLOAT;
+                dst_chroma = CHROMA_444;
+        
+                int size = pic_width * pic_height * sizeof( unsigned short);
+                
+                memcpy(  h.out_pic.fbuf[0], h.in_pic.fbuf[0], size );
+                memcpy(  h.out_pic.fbuf[1], h.in_pic.fbuf[1], size );
+                memcpy(  h.out_pic.fbuf[2], h.in_pic.fbuf[2], size );
+            }
+            
+            if( ua->output_file_type == OUTPUT_FILE_TYPE_YUV && h.out_pic.pic_buffer_type == PIC_TYPE_U16 )
+                write_yuv( ua->dst_filename, &h,  &(h.out_pic) );
+            else if( ua->output_file_type == OUTPUT_FILE_TYPE_DPX && h.out_pic.pic_buffer_type == PIC_TYPE_FLOAT )
+            {
+                float *tmp_dpx_pic = (float *) malloc( 3 * exr_pic.width * exr_pic.height * sizeof( float ) );
+        
+                planar_float_to_muxed_dpx_buf( tmp_dpx_pic, exr_pic.width, exr_pic.height, &exr_pic );
+        
+                //#if 0
+                dpx_write_float( ua->dst_filename, tmp_dpx_pic, exr_pic.width,  exr_pic.height);
+                free( tmp_dpx_pic );
+            }
+            else if ( ua->output_file_type == OUTPUT_FILE_TYPE_EXR && h.out_pic.pic_buffer_type == PIC_TYPE_FLOAT )
+            {
+                if( ua->input_file_type == OUTPUT_FILE_TYPE_EXR ||
+                   ua->input_file_type == INPUT_FILE_TYPE_DPX )
+                {
+                    int half_float_flag = 1;
+                    
+                    write_exr_file(
+                                   ua->dst_filename,
+                                   exr_pic.width,
+                                   exr_pic.height,
+                                   half_float_flag,
+                                   &exr_pic );
+
+                }
+            }
+        }
     }
     catch (const std::exception &exc)
     {

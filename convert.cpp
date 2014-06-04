@@ -38,6 +38,50 @@ float RHO_GAMMA_r( float L)
     return V;
 }
 
+// non-linear to linear
+float PQ10000_f( float V)
+{
+    float L;
+    // Lw, Lb not used since absolute Luma used for PQ
+    // formula outputs normalized Luma from 0-1
+    L = pow(fmax(pow(V, 1.0/78.84375) - 0.8359375 ,0.0)/(18.8515625 - 18.6875 * pow(V, 1.0/78.84375)),1.0/0.1593017578);
+    
+    return L;
+}
+
+// encode (V^gamma ish calculate L from V)
+//  encode   V = ((c1+c2*Y**n))/(1+c3*Y**n))**m
+float PQ10000_r( float L)
+{
+    float V;
+    // Lw, Lb not used since absolute Luma used for PQ
+    // input assumes normalized luma 0-1
+    V = pow((0.8359375+ 18.8515625*pow((L),0.1593017578))/(1+18.6875*pow((L),0.1593017578)),78.84375);
+    return V;
+}
+
+
+
+float bt1886_f( float V, float gamma, float Lw, float Lb)
+{
+    // The reference EOTF specified in Rec. ITU-R BT.1886
+    // L = a(max[(V+b),0])^g
+    float a = pow( pow( Lw, 1./gamma) - pow( Lb, 1./gamma), gamma);
+    float b = pow( Lb, 1./gamma) / ( pow( Lw, 1./gamma) - pow( Lb, 1./gamma));
+    float L = a * pow( fmax( V + b, 0.), gamma);
+    return L;
+}
+
+float bt1886_r( float L, float gamma, float Lw, float Lb)
+{
+    // The reference EOTF specified in Rec. ITU-R BT.1886
+    // L = a(max[(V+b),0])^g
+    float a = pow( pow( Lw, 1./gamma) - pow( Lb, 1./gamma), gamma);
+    float b = pow( Lb, 1./gamma) / ( pow( Lw, 1./gamma) - pow( Lb, 1./gamma));
+    float V = pow( fmax( L / a, 0.), 1./gamma) - b;
+    return V;
+}
+
 
 
 void Subsample444to420_box(unsigned short *dst_plane, unsigned short *src_plane, short width, short height, unsigned long minCV, unsigned long maxCV)
@@ -254,25 +298,33 @@ void Subsample444to420_FIR( unsigned short *dst_plane, unsigned short *src_plane
 
 
 
-int convert( t_hdr *h )
+int convert( t_pic *out_pic, t_hdr *h, t_pic *in_pic )
 {
     t_user_args *ua = &(h->user_args);
     
-    int arraySizeX = ua->dst_pic_width; // eg 3840
-    int arraySizeY = ua->dst_pic_height;
+    int arraySizeX = in_pic->width; // eg 3840
+    int arraySizeY = in_pic->height;
 
-    t_pic *in_pic = &(h->in_pic);
-    t_pic *out_pic = &(h->out_pic);
+//    t_pic *in_pic = &(h->in_pic);
+//    t_pic *out_pic = &(h->out_pic);
     
     
     int arraySizeXH = arraySizeX/2; // eg 1920 cols
     int arraySizeYH = arraySizeY/2; // eg 1080 rows
 
-    
+//#if 0
+    if( in_pic->pic_buffer_type != PIC_TYPE_U16 ||
+       out_pic->pic_buffer_type != PIC_TYPE_U16 )
+    {
+        printf("WARNING: convert() only takes in_pic and out_pic with type U16\n");
+        return(1);
+    }
+//#endif
     
     printf("DYUVPRIME2: %d\n", ua->dst_matrix_coeffs == MATRIX_YUVPRIME2 );
     
-    if( ua->dst_matrix_coeffs == MATRIX_YUVPRIME2 )
+    if( ua->dst_matrix_coeffs == MATRIX_YUVPRIME2
+       && ua->dst_chroma_format_idc == CHROMA_420 )
     {
         // the samples loaded into the 2D arrays YP[][], Cb444[][] and Cr444[][] from the TIFF source are 16-bits
         // with a rho-gamma EOTF applied.
@@ -523,37 +575,64 @@ int convert( t_hdr *h )
             free( scaled_gamma_Y_tmp_plane );
         
 
-    }else
+    }else if( ua->dst_chroma_format_idc == CHROMA_420 )
     {
         
         
         if( ua->chroma_resampler_type == 0 )
         {
-            Subsample444to420_box( h->out_pic.buf[1], h->in_pic.buf[1],  arraySizeX, arraySizeY, h->minCV, h->maxCV );
-            Subsample444to420_box( h->out_pic.buf[2], h->in_pic.buf[2],  arraySizeX, arraySizeY, h->minCV, h->maxCV );
+            Subsample444to420_box( out_pic->buf[1], in_pic->buf[1],  arraySizeX, arraySizeY, h->minCV, h->maxCV );
+            Subsample444to420_box( out_pic->buf[2], in_pic->buf[2],  arraySizeX, arraySizeY, h->minCV, h->maxCV );
         }
         else
         {
             // Subsample =1 means use FIR filter
-            Subsample444to420_FIR( h->out_pic.buf[1], h->in_pic.buf[1], arraySizeX, arraySizeY, h->minCV, h->maxCV );
-            Subsample444to420_FIR( h->out_pic.buf[2], h->in_pic.buf[2], arraySizeX, arraySizeY, h->minCV, h->maxCV );
+            Subsample444to420_FIR( out_pic->buf[1], in_pic->buf[1], arraySizeX, arraySizeY, h->minCV, h->maxCV );
+            Subsample444to420_FIR( out_pic->buf[2], in_pic->buf[2], arraySizeX, arraySizeY, h->minCV, h->maxCV );
         }
+        
+    }
+    else if( ua->dst_chroma_format_idc == CHROMA_444 )
+    {
+        // TODO: use pointer swaps, copies from a universal frame buffer pool
+        //  in future, rather than needlessly copy pictures
+        int size = arraySizeY * arraySizeX * sizeof( unsigned short);
+        
+        memcpy(  out_pic->buf[1], in_pic->buf[1], size );
+        memcpy(  out_pic->buf[2], in_pic->buf[2], size );
+      
+#if 0
+        for( int j = 0; j< arraySizeY; j++ )
+        {
+            int addr = j*arraySizeX;
+            
+            for( int i = 0; i< arraySizeX; i++ )
+            {
+                out_pic->buf[0][ addr + i ] = in_pic->buf[0][ addr + i ];
+                in_pic->buf[0][ addr + i ] = in_pic->buf[0][ addr + i ];
+            }
+        }
+#endif
         
     }
     
     
+    int size = arraySizeY * arraySizeX * sizeof( unsigned short);
+                                              
+    memcpy(  out_pic->buf[0], in_pic->buf[0], size );
+                                                                                    
+#if 0
     // didn't do anything to Y in this convert() routine, so copy it to dest.
     for( int j = 0; j< arraySizeY; j++ )
     {
+        int addr = j*arraySizeX;
+
         for( int i = 0; i< arraySizeX; i++ )
         {
-            int addr = j*arraySizeX + i;
-            
-            h->out_pic.buf[0][ addr ] = h->in_pic.buf[0][ addr ];
+            out_pic->buf[0][ addr + i ] = in_pic->buf[0][ addr + i ];
         }
-        
     }
-
+#endif
     
     
     h->out_pic.width = arraySizeX;
@@ -581,6 +660,8 @@ int matrix_convert( t_pic *out_pic, t_hdr *h, t_pic *in_pic )
     unsigned int Y;
     long Dz, Dx,RC,BC;
     
+    out_pic->width = in_pic->width;
+    out_pic->width = in_pic->width;
     
     t_user_args *ua = &(h->user_args);
     
@@ -589,6 +670,9 @@ int matrix_convert( t_pic *out_pic, t_hdr *h, t_pic *in_pic )
     
     // max pixel value (e.g 12 bits is 4095)
     
+    if( h->user_args.verbose_level > 0 )
+        printf("matrix conversion\n");
+                                          
     // set up alternate differencing equations for Y'DzwDxw
     float tmpF = 0.0;
     float P,Q,RR,S;
@@ -612,21 +696,8 @@ int matrix_convert( t_pic *out_pic, t_hdr *h, t_pic *in_pic )
     {
         int addr = y * width;
         
-        // strip is equal to the scanline from 0 to 2159
-        
-        
-        
-        // Read one scan line of packed samples into strip (line) buffer
-        //       TIFFReadRawStrip(tif, strip,   buf1, bc[0]);
-        
-        //printf("\rReading Line: %d-%d, Bytes: %d",strip+1,strip+4, bc[0]);
-        
         for (int x = 0; x < width; x++)
         {
-            // step line in blocks of numChan pixels:
-            // that numChan2*ib is byte location of pixel start
-            //     int ib = 0;
-            
             // read rgba
             // 12 bit YDzDx formular from octave script:
             //  trans_new = [ 0 1 0; 0 -0.5 0.5; 0.5 -0.5 0 ]
@@ -640,61 +711,231 @@ int matrix_convert( t_pic *out_pic, t_hdr *h, t_pic *in_pic )
             // pixel/2 is unsigned short width index to first R
             // in block of 4 pixels of 4 values RGBA
             // buf1-4 are the 4 scan lines reading
-            
-            unsigned int G = in_pic->buf[0][addr+x];
-            unsigned int B = in_pic->buf[1][addr+x];
-            unsigned int R = in_pic->buf[2][addr+x];
+            float G, B, R;
             
             
-            if( ua->dst_matrix_coeffs == MATRIX_YDzDx ) {
+            // first convert input to float if not already float
+            
+            
+            if( in_pic->pic_buffer_type == PIC_TYPE_FLOAT )
+            {
+                G =  in_pic->fbuf[0][addr+x];
+                B =  in_pic->fbuf[1][addr+x];
+                R =  in_pic->fbuf[2][addr+x];
                 
-                Y = G;
-                Dz = (int)(-((float)G)/2.0 +((float)B)/2.0 +0.5); //-(int)((G+1)>>1) + (int)((B+1)>>1);
-                Dx =  (int)(-((float)G)/2.0 +((float)R)/2.0 +0.5); //(int)((R+1)>>1) - (int)((G+1)>>1);
-                //printf("Y: %d, Dz: %d, Dz: %d\n",Y,Dz,Dx);
-                
-            } else if( ua->dst_matrix_coeffs == MATRIX_BT2020nc ){
-                tmpF = (0.2627*(float)R + 0.6780*(float)G + 0.0593*(float)B) +0.5;
-                Y = (unsigned int)(tmpF);
-                Dz = (int)((((float)B) - tmpF)/1.8814 + 0.5);
-                Dx = (int)((((float)R) - tmpF)/1.4746 + 0.5);
-            } else if( ua->dst_matrix_coeffs == MATRIX_BT709 ) {
-                tmpF = (0.2126*(float)R + 0.7152*(float)G + 0.0722*(float)B) +0.5;
-                Y = (unsigned int)(tmpF);
-                Dz = (int)((((float)B) - tmpF)/1.8556 + 0.5);
-                Dx = (int)((((float)R) - tmpF)/1.5748 + 0.5);
-            } else if(ua->dst_matrix_coeffs == MATRIX_YDzDx_Y100
-                      || ua->dst_matrix_coeffs == MATRIX_YDzDx_Y500) {
-                Y = (unsigned int)(G);
-                Dz = (int)( P *((float)G) + Q *((float)B) + 0.5);
-                Dx = (int)( RR *((float)R) + S *((float)G) + 0.5);
-            } else if(ua->dst_matrix_coeffs == MATRIX_YUVPRIME2) {
-                Y = (unsigned int) (G);
-                Dz = (unsigned int) (B);
-                Dx = (unsigned int) (R);
-            } else {
-                printf("Can't determine color difference to use?\n\n");
-                exit(0);
+                // exr content from Technicolor appears to be ranged for 4k nits
+                // we could use stats in read_exr to autoscale..
+
+            }
+            else if(  in_pic->pic_buffer_type == PIC_TYPE_U16 )
+            {
+                G = (float) in_pic->buf[0][addr+x];
+                B = (float) in_pic->buf[1][addr+x];
+                R = (float) in_pic->buf[2][addr+x];
             }
             
-            Dz = Dz + h->Half - 1;
-            Dx = Dx + h->Half - 1;
+            // scale the image to real-value 0.0 to 1.0 range
+            
+            // if your source video is not graded with human assist tools like
+            // BaseLight or Davinci Resolve, then can use AMPAS' ctlrender
+            // to run each input frame through a tone mapper like rrt.ctl.
+            
+            
+            // for this program, we assume .exr files are RRT tone mapped and
+            // in OCES RGB space.
+            // this simulates what odt_PQ10k2020.ctl does here..
+            
+            
+            int src_transfer = ua->src_transfer_characteristics;
+            
+            
+            // step 1: convert
+            if( src_transfer != ua->dst_transfer_characteristics )
+            {
+                // perform conversion from src to dst transfer
+                
+                // frist, scale to real-value range (0.0 to 1.0)
+                G = G / 10000.0;
+                B = B / 10000.0;
+                R = R / 10000.0;
+
+                // should probably use function pointers for this next step
+                
+                // step 1: convert to linear (float)
+                if( src_transfer != TRANSFER_LINEAR )
+                {
+                    // convert to non-linear
+                    if( src_transfer == TRANSFER_PQ )
+                    {
+                        G = PQ10000_f( G );
+                        B = PQ10000_f( B );
+                        R = PQ10000_f( R );
+                        
+                        src_transfer = TRANSFER_LINEAR;
+                    }
+                    else if( ua->dst_transfer_characteristics == TRANSFER_RHO_GAMMA )
+                    {
+                        G = RHO_GAMMA_f( G );
+                        B = RHO_GAMMA_f( B );
+                        R = RHO_GAMMA_f( R );
+                        
+                        src_transfer = TRANSFER_LINEAR;
+                    }
+                    // these transfers are not exactly the same but close enough
+                    // for now..
+                    else if( src_transfer == TRANSFER_BT709
+                            || src_transfer == TRANSFER_BT2020_10bit
+                            || src_transfer == TRANSFER_BT2020_12bit
+                            || src_transfer == TRANSFER_BT601 )
+                    {
+                        
+                        const float DISPGAMMA = 2.4;
+                        const float L_W = 1.0;
+                        const float L_B = 0.0;
+                        
+                        G = bt1886_f( G, DISPGAMMA, L_W, L_B);
+                        B = bt1886_f( B, DISPGAMMA, L_W, L_B);
+                        R = bt1886_f( R, DISPGAMMA, L_W, L_B);
+                        
+                        src_transfer =TRANSFER_LINEAR;
+                    }
+                    else
+                        printf("WARNING: src_transfer_characteristics (%d) not supported (yet)\n", ua->src_transfer_characteristics );
+                    
+                }
+                
+                // step 2: convert to transfer desired for output
+                
+                if( src_transfer == TRANSFER_LINEAR &&
+                   ua->dst_transfer_characteristics != TRANSFER_LINEAR )
+                {
+                    // convert to non-linear
+                    if( ua->dst_transfer_characteristics == TRANSFER_PQ )
+                    {
+                        G = PQ10000_r( G );
+                        B = PQ10000_r( B );
+                        R = PQ10000_r( R );
+                        
+                        src_transfer = TRANSFER_PQ;
+                    }
+                    else if( ua->dst_transfer_characteristics == TRANSFER_RHO_GAMMA )
+                    {
+                        G = RHO_GAMMA_r( G );
+                        B = RHO_GAMMA_r( B );
+                        R = RHO_GAMMA_r( R );
+                        
+                        src_transfer = TRANSFER_RHO_GAMMA;
+                    }
+                    // these transfers are not exactly the same but close enough
+                    // for now..
+                    else if( ua->dst_transfer_characteristics == TRANSFER_BT709
+                        || ua->dst_transfer_characteristics == TRANSFER_BT2020_10bit
+                        || ua->dst_transfer_characteristics == TRANSFER_BT2020_12bit
+                        || ua->dst_transfer_characteristics == TRANSFER_BT601 )
+                    {
+                        
+                        const float DISPGAMMA = 2.4;
+                        const float L_W = 1.0;
+                        const float L_B = 0.0;
+                        
+                        G = bt1886_r( G, DISPGAMMA, L_W, L_B);
+                        B = bt1886_r( B, DISPGAMMA, L_W, L_B);
+                        R = bt1886_r( R, DISPGAMMA, L_W, L_B);
+                        
+                        src_transfer = ua->dst_transfer_characteristics;
+                    }
+                    else
+                        printf("WARNING: dst_transfer_characteristics(%d) not supported (yet)\n",ua->dst_transfer_characteristics );
+                }
+
+                // scale back
+                // this should be a variable and be checked against whether
+                // the transfer function assumes a fixed map to brightness
+                G = G * 10000.0;
+                B = B * 10000.0;
+                R = R * 10000.0;
+
+            
+            }
+            
+               
+            if( in_pic->pic_buffer_type == PIC_TYPE_U16 )
+            {
+                if( ua->dst_matrix_coeffs == MATRIX_GBR ||
+                   ua->dst_matrix_coeffs == MATRIX_UNSPECIFIED
+                   || ua->dst_matrix_coeffs == MATRIX_RESERVED  )
+                                          
+                {
+                    Y = (unsigned int)G;
+                    Dz = (unsigned int)B;
+                    Dx = (unsigned int)R;
+                }
+                else
+                {
+                    if( ua->dst_matrix_coeffs == MATRIX_YDzDx ) {
+                
+                        Y = (unsigned int) G;
+                        Dz = (int)(-G/2.0  + B/2.0 +0.5); //-(int)((G+1)>>1) + (int)((B+1)>>1);
+                        Dx =  (int)(-G/2.0 +R/2.0 +0.5); //(int)((R+1)>>1) - (int)((G+1)>>1);
+                //printf("Y: %d, Dz: %d, Dz: %d\n",Y,Dz,Dx);
+                
+                    } else if( ua->dst_matrix_coeffs == MATRIX_BT2020nc ){
+                        tmpF = (0.2627*R + 0.6780*G + 0.0593*B) +0.5;
+                        Y = (unsigned int)(tmpF);
+                        Dz = (int)((B - tmpF)/1.8814 + 0.5);
+                        Dx = (int)((R - tmpF)/1.4746 + 0.5);
+                    } else if( ua->dst_matrix_coeffs == MATRIX_BT709 ) {
+                        tmpF = (0.2126*R + 0.7152*G + 0.0722*B) +0.5;
+                        Y = (unsigned int)(tmpF);
+                        Dz = (int)((B - tmpF)/1.8556 + 0.5);
+                        Dx = (int)((R - tmpF)/1.5748 + 0.5);
+                    } else if(ua->dst_matrix_coeffs == MATRIX_YDzDx_Y100
+                      || ua->dst_matrix_coeffs == MATRIX_YDzDx_Y500) {
+                        Y = (unsigned int)(G);
+                        Dz = (int)( P *G + Q*B + 0.5);
+                        Dx = (int)( RR*R + S*G + 0.5);
+                    } else if(ua->dst_matrix_coeffs == MATRIX_YUVPRIME2) {
+                        Y = (unsigned int) (G);
+                        Dz = (unsigned int) (B);
+                        Dx = (unsigned int) (R);
+                    } else {
+                        printf("Can't determine color difference to use?\n\n");
+                        exit(0);
+                    }
+                }
+                                          
+                Dz = Dz + h->Half - 1;
+                Dx = Dx + h->Half - 1;
             
             //printf("Y: %d, Dz: %d, Dz: %d\n",Y,Dz,Dx);
             // clamp to full range
-            if( Y > h->maxCV) Y=h->maxCV;
-            if( Dz > h->maxCV) Dz=h->maxCV;
-            if( Dz < h->minCV) Dz=h->minCV;
-            if( Dx > h->maxCV) Dx=h->maxCV;
-            if( Dx < h->minCV) Dx=h->minCV;
+                if( Y > h->maxCV) Y=h->maxCV;
+                if( Dz > h->maxCV) Dz=h->maxCV;
+                if( Dz < h->minCV) Dz=h->minCV;
+                if( Dx > h->maxCV) Dx=h->maxCV;
+                if( Dx < h->minCV) Dx=h->minCV;
             //printf("Y: %d, Dz: %d, Dz: %d\n",Y,Dz,Dx);
             
-            int dst_addr =  y*width + x;
+                int dst_addr =  y*width + x;
             
-            h->in_pic.buf[0][ dst_addr ]= Y;
-            h->in_pic.buf[1][ dst_addr ]= Dz;
-            h->in_pic.buf[2][ dst_addr ]= Dx;
-            
+                out_pic->buf[0][ dst_addr ]= Y;
+                out_pic->buf[1][ dst_addr ]= Dz;
+                out_pic->buf[2][ dst_addr ]= Dx;
+            }
+            else if( in_pic->pic_buffer_type == PIC_TYPE_FLOAT)
+            {
+                // TODO: just swap pointers in a general frame buffer memory pool
+                int dst_addr =  y*width + x;
+                out_pic->fbuf[0][ dst_addr ]= G;
+                out_pic->fbuf[1][ dst_addr ]= B;
+                out_pic->fbuf[2][ dst_addr ]= R;
+
+            }
+            else
+            {
+                printf("ERROR, matrix_convert(): in_pic pic_buffer_type (%d) not recognized", in_pic->pic_buffer_type );
+                exit(0);
+            }
             // Fill Source 444 Chroma Arrays Cb444 and Cr444
         }   // x
     } // y

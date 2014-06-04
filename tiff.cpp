@@ -216,10 +216,6 @@ int read_tiff( t_pic *tif_pic, t_hdr *h, char* filename )
     h->in_pic.buf[1] = (unsigned short*) malloc(arraySizeX*arraySizeY*sizeof(unsigned short));
     h->in_pic.buf[2] = (unsigned short*) malloc(arraySizeX*arraySizeY*sizeof(unsigned short));
     
-    h->out_pic.buf[0] = (unsigned short*) malloc(arraySizeX*arraySizeY*sizeof(unsigned short));
-    h->out_pic.buf[1] = (unsigned short*) malloc(arraySizeX*arraySizeY*sizeof(unsigned short));
-    h->out_pic.buf[2] = (unsigned short*) malloc(arraySizeX*arraySizeY*sizeof(unsigned short));
-    
     
     // Reduce numStrips to what is needed to center cut:
     numStrips = numStrips - stripStart;
@@ -309,7 +305,7 @@ int read_tiff( t_pic *tif_pic, t_hdr *h, char* filename )
         warning_count++;
     }
     
-    
+    tif_pic->pic_buffer_type = PIC_TYPE_U16;
     tif_pic->width = pic_width;
     tif_pic->height = pic_height;
     tif_pic->bit_depth = bit_depth;
@@ -324,12 +320,15 @@ int read_tiff( t_pic *tif_pic, t_hdr *h, char* filename )
     return 0;
 }
 
+// uses the tiff library to write raw (.yuv) file
+// that is why write_yuv() is here.
+// only tiff.cpp is supposed to link to the tiff library, not other .cpp files.
 
-int write_tiff( char *filename, t_hdr *h )
+int write_yuv( char *filename, t_hdr *h, t_pic *pic )
 {
   //      t_user_args *ua = &(h->user_args);
     
-    t_pic *pic = &(h->out_pic);
+   // t_pic *pic = &(h->out_pic);
     
     ofstream yuvOut;
     int arraySizeX = pic->width; // eg 3840
@@ -382,7 +381,8 @@ int write_tiff( char *filename, t_hdr *h )
         sprintf( tbuf, "%s_%s_%dx%d_420p_%dbits.yuv", filename, prefix, arraySizeX, arraySizeY, bit_depth );
         yuvOut.open( tbuf, ios::ate | ios::app | ios::out | ios::binary);
 #endif
-        sprintf( tbuf, "YDzDx.yuv" );
+          //     sprintf( tbuf, "YDzDx.yuv" );
+        sprintf( tbuf, "%s", filename );
         yuvOut.open( tbuf, ios::ate | ios::app | ios::out | ios::binary);
         
         printf("Opened %s to file end and appending:\n", tbuf );
@@ -390,7 +390,7 @@ int write_tiff( char *filename, t_hdr *h )
 
     // write planer output:
     
-    printf("writing line data %d bits\n", bit_depth);
+    printf("writing %d x %d  pixels at %d bit_depth\n", pic->width, pic->height, bit_depth);
     
     
     // TODO: move the clipping operation outside of writetiff
