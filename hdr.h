@@ -349,8 +349,9 @@ typedef struct
     int src_matrix_coeffs;
     int dst_matrix_coeffs;
     
-    int src_video_full_range_flag;  // 0: 16,235   1:  0,255
+;  // 0: 16,235   1:  0,255
     int dst_video_full_range_flag;
+    int src_video_full_range_flag;
     
     int src_chroma_sample_loc_type;
     int dst_chroma_sample_loc_type;
@@ -453,10 +454,12 @@ int matrix_convert( t_pic *out_pic, t_hdr *h, t_pic *in_pic );
 // tiff.cpp
 int read_tiff( t_pic *tif_pic, t_hdr *h, char* filename );
 
-// dpx.cpp
+// dpx.cpp from Gary Demos
 void dpx_write_float(char *outname, float *pixel_result, short width, short height);
-void dpx_read (char *inname, float *pixels_read, short *width, short *height, short cineon, short half_flag);
+void dpx_read (char *inname, float **pixels_read, short *width, short *height, short cineon, short half_flag);
 void dpx_write_10bit_from_float(char *outname, float *pixel_result, short width, short height);
+void  dpx_write_10bit_from_float(char *outname, float *pixel_result, short width, short height);
+
 
 // common.cpp
 int planar_float_to_muxed_dpx_buf( float *dst, int width, int height, t_pic *src );

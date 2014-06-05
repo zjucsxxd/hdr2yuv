@@ -206,7 +206,8 @@ static U32 undefR32 = 0xffffffff;
 // slight change to float *pixels_read from "**pixel_read"
 
 void
-dpx_read (char *inname, float *pixels_read, short *width, short *height, short cineon, short half_flag)
+//dpx_read (char *inname, float *pixels_read, short *width, short *height, short cineon, short half_flag)
+dpx_read (char *inname, float **pixels_read, short *width, short *height, short cineon, short half_flag)
 {
     
     FILE *fp;
@@ -372,9 +373,9 @@ dpx_read (char *inname, float *pixels_read, short *width, short *height, short c
     
     
     pixels = (float *) malloc(wide * tall * 12); /* 4-bytes/float * 3-colors */
-//    *pixels_read = &pixels[0];
+   *pixels_read = &pixels[0];
     // CF: changed to single pointer (non-array)
-    pixels_read = pixels;
+//    pixels_read = pixels;
     
 #ifdef VERBOSE_PROCESSING
     printf(" reading dpx or cineon file pixels \n ");
