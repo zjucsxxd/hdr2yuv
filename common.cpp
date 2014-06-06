@@ -36,27 +36,4 @@ int planar_float_to_muxed_dpx_buf( float *dst, int width, int height, t_pic *src
 
 
 
-#if 0
-int planar_float_to_muxed_dpx_buf( float *dst, int width, int height, t_pic *src )
-{
-    for( int y = 0; y < height; y++ )
-    {
-        float *dst_line = &(dst[ y * width * 3 ]);
-        float *srcG =  &(src->fbuf[0][ y * width]);
-        float *srcR =  &(src->fbuf[1][ y * width]);
-        float *srcB =  &(src->fbuf[2][ y * width]);
-        
-        
-        for( int x = 0; x < width; x++  )
-        {
-            dst_line[ x*3 + 0 ] = srcR[x];
-            dst_line[ x*3 + 1 ] = srcG[x];
-            dst_line[ x*3 + 2 ] = srcB[x];
-        }
-    }
-    
-    return 0;
-}
-#endif
-
 

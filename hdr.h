@@ -23,6 +23,7 @@ enum input_file_type_list {
     INPUT_FILE_TYPE_EXR,
     INPUT_FILE_TYPE_Y4M,
     INPUT_FILE_TYPE_DPX,
+    INPUT_FILE_TYPE_RGB,
     INPUT_FILE_TYPE_LAST,
 };
 
@@ -33,6 +34,7 @@ enum output_file_type_list {
     OUTPUT_FILE_TYPE_EXR,
     OUTPUT_FILE_TYPE_Y4M,
     OUTPUT_FILE_TYPE_DPX,
+    OUTPUT_FILE_TYPE_RGB,
     OUTPUT_FILE_TYPE_LAST,
 };
 
@@ -50,7 +52,8 @@ static struct type_info_t input_file_types[] =
     { INPUT_FILE_TYPE_TIFF, "tiff", 1 },
     { INPUT_FILE_TYPE_EXR, "exr", 1 },
     { INPUT_FILE_TYPE_Y4M, "y4m", 0 },
-    { INPUT_FILE_TYPE_DPX, "dpx", 1 }
+    { INPUT_FILE_TYPE_DPX, "dpx", 1 },
+    { INPUT_FILE_TYPE_RGB, "rgb", 1 }
 };
 
 static struct type_info_t output_file_types[] =
@@ -60,7 +63,8 @@ static struct type_info_t output_file_types[] =
     { OUTPUT_FILE_TYPE_TIFF, "tiff", 0 },
     { OUTPUT_FILE_TYPE_EXR, "exr", 1 },
     { OUTPUT_FILE_TYPE_Y4M, "y4m", 0 },
-    { OUTPUT_FILE_TYPE_DPX, "dpx", 1 }
+    { OUTPUT_FILE_TYPE_DPX, "dpx", 1 },
+    { OUTPUT_FILE_TYPE_RGB, "rgb", 0 }
 };
 
 

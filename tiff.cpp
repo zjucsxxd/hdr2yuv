@@ -329,7 +329,6 @@ int write_yuv( char *filename, t_hdr *h, t_pic *pic )
   //      t_user_args *ua = &(h->user_args);
     
    // t_pic *pic = &(h->out_pic);
-    
     ofstream yuvOut;
     int arraySizeX = pic->width; // eg 3840
     int arraySizeY = pic->height;
@@ -343,7 +342,7 @@ int write_yuv( char *filename, t_hdr *h, t_pic *pic )
     // Write YUV Frame
     // arrar to store line of output for writing process
     unsigned short  *Line;
-    
+    t_user_args *ua = &(h->user_args);
     // set output line array to unsigned short
     Line =  (unsigned short*) malloc(arraySizeX*sizeof(unsigned short));
     
@@ -390,7 +389,7 @@ int write_yuv( char *filename, t_hdr *h, t_pic *pic )
 
     // write planer output:
     
-    printf("writing %d x %d  pixels at %d bit_depth\n", pic->width, pic->height, bit_depth);
+    printf("writing %d x %d  pixels at %d bit_depth (from %d bits)\n", pic->width, pic->height, pic->bit_depth, ua->dst_bit_depth);
     
     
     // TODO: move the clipping operation outside of writetiff
@@ -412,7 +411,7 @@ int write_yuv( char *filename, t_hdr *h, t_pic *pic )
                 Y = (Y > h->maxVR) ? h->maxVR : Y;
                 Yptr[c] = Y;
             }
-            Line[c] = Yptr[c]>>(16-bit_depth);
+            Line[c] = Yptr[c]>>(pic->bit_depth - ua->dst_bit_depth);
             //printf(" Line[%d] = %d,  YP[%d][%d] = %d  ",c,Line[c],c,r,YP[c][r]);
         }
         //    write line arrary yuvOut.write(
@@ -435,7 +434,7 @@ int write_yuv( char *filename, t_hdr *h, t_pic *pic )
                 Cb = (Cb > h->maxVRC) ? h->maxVRC : Cb;
                 CbPtr[c] = Cb;
             }
-            Line[c] = CbPtr[c] >>(16-bit_depth);
+            Line[c] = CbPtr[c] >>(pic->bit_depth - ua->dst_bit_depth);
         }
         //    write line arrary yuvOut.write(
         yuvOut.write((char *)Line,2*arraySizeXH);
@@ -458,7 +457,7 @@ int write_yuv( char *filename, t_hdr *h, t_pic *pic )
                 Cr = (Cr > h->maxVRC) ? h->maxVRC : Cr;
                 CrPtr[c] = Cr;
             }
-            Line[c] = CrPtr[c] >>(16-bit_depth);
+            Line[c] = CrPtr[c] >>(pic->bit_depth - ua->dst_bit_depth);
         }
         //    write line arrary yuvOut.write(
         yuvOut.write((char *)Line,2*arraySizeXH);

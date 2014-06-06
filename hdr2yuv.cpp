@@ -56,7 +56,8 @@ void print_help( void )
 int parse_options( t_user_args *par, int argc,  char *argv[] )
 {
 //    t_user_args *par = &(h->args);
-    
+    int arg_errors =0;
+
     // default values overriden first by parse_options() then read_tiff() or exr
     par->src_pic_width = 1920;
     par->src_pic_height = 1080;
@@ -96,7 +97,7 @@ int parse_options( t_user_args *par, int argc,  char *argv[] )
             
             i++;
         }
-        if( !strcmp( argv[i], "--help") && (i<argc) )
+        else if( !strcmp( argv[i], "--help") && (i<argc) )
         {
             print_help();
         }
@@ -251,15 +252,17 @@ int parse_options( t_user_args *par, int argc,  char *argv[] )
             i++;
         }
         else
-            printf("argument (%s) unrecongized\n", argv[i] );
+            printf("WARNING: argument (%s) unrecongized\n", argv[i] );
+        //    arg_errors++;
+        //    i++;
+        //}
         
     }
     
 
     // beginning of sanity checks..
     
-    int arg_errors =0;
-
+ 
     char *ext = get_filename_extension( par->src_filename );
     
     for(int i=0; i<INPUT_FILE_TYPE_LAST; i++ )
@@ -292,7 +295,6 @@ int parse_options( t_user_args *par, int argc,  char *argv[] )
         printf("WARNING: output file (%s) type extension (%s) idx(%d) is either not recongized or not supported\n", par->dst_filename, ext, par->output_file_type );
         arg_errors++;
     }
-    
     
     
     //printf(")
@@ -374,33 +376,55 @@ int parse_options( t_user_args *par, int argc,  char *argv[] )
         arg_errors++;
     }
     
-
-    
-    if( arg_errors != 0 ){
-        printf("TOO MANY ARGUMENT ERRORS. ABORTING PROGRAM\n\n");
+    if( arg_errors )
+    {
+  //      print_help();
+        printf("TOO MANY ARGUMENT ERRORS. ABORTING PROGRAM. --help to show options\n\n");
         exit(0);
     }
+
+    
     
     return(0);
     
 }
 
 // TODO: add all the t_pic attributes to the command line input
-
-int init_pic( t_pic *pic, int width, int height, int chroma_format_idc, int sample_type, int half_float_flag, int verbose_level, const char *name )
+void copy_pic_vars( t_pic *dst, t_pic *src )
+{
+    dst->width = src->width;
+    dst->height = src->height;
+    dst->pic_buffer_type = src->pic_buffer_type;
+    dst->chroma_format_idc = src->chroma_format_idc;
+    dst->bit_depth = src->bit_depth;
+    dst->name = src->name;
+    dst->half_float_flag = src->half_float_flag;
+    dst->pic_buffer_type = src->pic_buffer_type;
+    
+}
+int init_pic( t_pic *pic, int width, int height, int chroma_format_idc, int bit_depth, int sample_type, int half_float_flag, int verbose_level, const char *name )
 {
     pic->width = width;
     pic->height = height;
     pic->pic_buffer_type = sample_type;
     pic->chroma_format_idc = chroma_format_idc;
+    pic->bit_depth = bit_depth;
     pic->name = name;
+
+#if 0 
+    if( verbose_level > 2 )
+    {
+        printf("init_pic(%s): width(%d) height(%d) buf_type(%d) chroma_format(%d) bit_depth(%d)\n", pic->name, pic->width, pic->height, pic->pic_buffer_type, pic->chroma_format_idc, pic->bit_depth );
+    
+    }
+#endif
     
     if( verbose_level > 2 )
-        printf("intializing picture (%s):  w(%d) h(%d) type(%d: %s) chroma_format_idc(%d)\n",
-               name, width, height, sample_type, sample_type == PIC_TYPE_FLOAT ? "FLOAT" : "U16", chroma_format_idc );
+        printf("intializing picture (%s):  w(%d) h(%d) depth(%d) type(%d: %s) chroma_format_idc(%d) depth(%d)\n",
+               pic->name, pic->width, pic->height, pic->bit_depth, pic->pic_buffer_type, pic->pic_buffer_type == PIC_TYPE_FLOAT ? "FLOAT" : "U16", pic->chroma_format_idc, pic->bit_depth);
     
     if( width < 1 || width > 10000 || height < 1 || height > 10000 )
-        printf("init_pic() ERROR: picture dimensions( %d x %d) out of bounds\n ", width, height );
+        printf("init_pic(%s) ERROR: picture dimensions( %d x %d) out of bounds\n ",name,  width, height );
     
     if( sample_type == PIC_TYPE_U16 )
     {
@@ -484,6 +508,53 @@ int deinit_pic( t_pic *pic )
     
 }
 
+  
+// TODO: fseek
+void read_planar_integer_file( t_pic *dst, char *filename, int file_type, int start_frame )
+{
+    int error_cnt = 0;
+    
+    int y_size = dst->width * dst->height;
+    int c_width = dst->chroma_format_idc  == CHROMA_444 ? dst->width : (dst->width /2);
+    int c_height = dst->chroma_format_idc == CHROMA_420 ? (dst->height/2) : dst->height;
+    int c_size = c_width * c_height;
+    
+    if( dst->bit_depth < 10 || dst->bit_depth > 16 ) {
+       printf("read_planar_integer_file(), WARNING: bit_depth(%d) outside supported range [10,16]\n", dst->bit_depth );
+       error_cnt++;
+    }
+
+    if( file_type == INPUT_FILE_TYPE_RGB && dst->chroma_format_idc != CHROMA_444 )
+    {
+        printf("read_planar_integer_file(), WARNING: file type is .rgb but src_chroma_format_idc(%d) not equal to CHROMA_444 (%d)\n", dst->chroma_format_idc, CHROMA_444 );
+        error_cnt++;
+    }
+
+    if( error_cnt ){
+        printf("read_planar_integer_file(): Too many warnings (%d). Exiting program\n", error_cnt );
+      exit(0);
+    }
+
+    FILE *in_file_ptr  = fopen( filename, "rb" );
+    
+    if( file_type == INPUT_FILE_TYPE_RGB  )
+    {
+        int b = 0;
+        
+        // order is R,G,B in the JCT adhoc's  ... not G,B,R like our internal format here
+        
+        // assume each input sample is contained (LSB justified) in one 16-bit short.
+        b += fread( dst->buf[2], sizeof( unsigned short), y_size, in_file_ptr );  // R
+        b += fread( dst->buf[0], sizeof( unsigned short), y_size, in_file_ptr );  // G
+        b += fread( dst->buf[1], sizeof( unsigned short), y_size, in_file_ptr );  // B
+        
+        
+        printf("read %d unsigned shorts from %s\n", b, filename );
+    }
+    
+    fclose( in_file_ptr );
+}
+
 // TODO: y4m, hist, write openxr,  psnr, check video range, ...
 
 // TODO: move init_pic() into common.   Make all read routines (read_exr, read_tiff, etc.) use it
@@ -532,7 +603,26 @@ int main (int argc, char *argv[])
         
        // exr_test((char *)"Market3_1920x1080p_50_hf_709_00000.exr");
         //       exr_test( &exr_pic, (char *)"Seine_1920x1080p_25_hf_709_00000_rrtd_tmp.exr" );
-        if( ua->input_file_type == INPUT_FILE_TYPE_DPX )
+        if( ua->input_file_type == INPUT_FILE_TYPE_RGB )
+        {
+            t_pic raw_pic;
+            raw_pic.init = 0;
+
+            
+            init_pic( &raw_pic, ua->src_pic_width, ua->src_pic_height, ua->src_chroma_format_idc, ua->src_bit_depth, PIC_TYPE_U16, 0, ua->verbose_level, "raw_pic from rgb" );
+
+            // TODO: derive attributes (size, chroma_format, bitdepth from filename )
+            read_planar_integer_file( &raw_pic, ua->src_filename, ua->input_file_type, 0);
+
+            init_pic( &(h.in_pic), raw_pic.width, raw_pic.height, raw_pic.chroma_format_idc, raw_pic.bit_depth, raw_pic.pic_buffer_type, 0, ua->verbose_level, "RGB in_pic" );
+            
+            matrix_convert(  &(h.in_pic), &h, &raw_pic );
+            
+            pic_width = raw_pic.width;
+            pic_height = raw_pic.height;
+            
+        }
+        else if( ua->input_file_type == INPUT_FILE_TYPE_DPX )
         {
             float *tmp_dpx_pic;
             short dpx_width, dpx_height;
@@ -555,7 +645,7 @@ int main (int argc, char *argv[])
             pic_height = dpx_height;
 
             printf("read dpx file: width(%d) height(%d)\n", pic_width, pic_height );
-            init_pic( &exr_pic, pic_width, pic_height, CHROMA_444, PIC_TYPE_FLOAT, half_flag, ua->verbose_level, "exr_pic from dpx" );
+            init_pic( &exr_pic, pic_width, pic_height, CHROMA_444, 32, PIC_TYPE_FLOAT, half_flag, ua->verbose_level, "exr_pic from dpx" );
 
     
             muxed_dpx_to_planar_float_buf( &exr_pic, pic_width, pic_height, tmp_dpx_pic );
@@ -563,7 +653,7 @@ int main (int argc, char *argv[])
             if( ua->verbose_level > 0 )
                 printf("muxed_dpx_to_planar_float_buf\n");
 
-            init_pic( &(h.in_pic), exr_pic.width, exr_pic.height, CHROMA_444, PIC_TYPE_FLOAT, half_flag, ua->verbose_level, "in_pic from dpx" );
+            init_pic( &(h.in_pic), exr_pic.width, exr_pic.height, CHROMA_444, 32, PIC_TYPE_FLOAT, half_flag, ua->verbose_level, "in_pic from dpx" );
        
        //     if( ua->output_file_type != OUTPUT_FILE_TYPE_EXR )
             {
@@ -585,7 +675,7 @@ int main (int argc, char *argv[])
            pic_width = exr_pic.width;
            pic_height = exr_pic.height;
            
-            init_pic( &(h.in_pic), exr_pic.width, exr_pic.height, CHROMA_444, PIC_TYPE_FLOAT, half_flag, ua->verbose_level, "in_pic" );
+            init_pic( &(h.in_pic), exr_pic.width, exr_pic.height, CHROMA_444, 32, PIC_TYPE_FLOAT, half_flag, ua->verbose_level, "in_pic" );
            
        
            matrix_convert( &(h.in_pic), &h, &exr_pic );
@@ -596,44 +686,44 @@ int main (int argc, char *argv[])
             pic_width = tif_pic.width;
             pic_height = tif_pic.height;
 
-            init_pic( &(h.in_pic), tif_pic.width, tif_pic.height, CHROMA_444, PIC_TYPE_U16, 0, ua->verbose_level, "in_pic" );
+            init_pic( &(h.in_pic), tif_pic.width, tif_pic.height,  CHROMA_444, 16, PIC_TYPE_U16, 0, ua->verbose_level, "in_pic" );
             matrix_convert( &(h.in_pic), &h, &tif_pic );
         }
         
         if( ua->dst_filename != NULL ){
             
-            int dst_type, dst_chroma;
-            
+            int dst_pic_buf_type, dst_chroma_format_idc;
+   
             if( ua->output_file_type == OUTPUT_FILE_TYPE_DPX || ua->output_file_type == OUTPUT_FILE_TYPE_EXR )
             {
-                dst_type = PIC_TYPE_FLOAT;
-                dst_chroma = CHROMA_444;
+                dst_pic_buf_type = PIC_TYPE_FLOAT;
+                dst_chroma_format_idc = CHROMA_444;
             }
             else
             {
-                dst_type = PIC_TYPE_U16;
-                dst_chroma = CHROMA_420;
+                dst_pic_buf_type = PIC_TYPE_U16;
+                dst_chroma_format_idc = CHROMA_420;
             }
             
-            init_pic( &(h.out_pic), pic_width, pic_height, dst_chroma, dst_type, 0, ua->verbose_level, "out_pic" );
+            init_pic( &(h.out_pic), pic_width, pic_height, dst_chroma_format_idc, ua->dst_bit_depth, dst_pic_buf_type, 0, ua->verbose_level, "out_pic" );
         
             int should_convert = 0;
             
             if( h.out_pic.chroma_format_idc !=  h.in_pic.chroma_format_idc )
             {
-                printf("convert() because chroma format dst(%d) != src(%d) ", h.out_pic.chroma_format_idc, h.in_pic.chroma_format_idc);
+                printf("convert() because chroma format dst(%d) != src(%d)\n", h.out_pic.chroma_format_idc, h.in_pic.chroma_format_idc);
                 should_convert++;
             }
             
             if( h.out_pic.width !=  h.in_pic.width )
             {
-                printf("convert() because width dst(%d) != src(%d) ",  h.out_pic.width ,  h.in_pic.width );
+                printf("convert() because width dst(%d) != src(%d)\n",  h.out_pic.width ,  h.in_pic.width );
                 should_convert++;
             }
             
             if( h.out_pic.height !=  h.in_pic.height )
             {
-                printf("convert() because height dst(%d) != src(%d) ",  h.out_pic.height , h.in_pic.height );
+                printf("convert() because height dst(%d) != src(%d)\n",  h.out_pic.height , h.in_pic.height );
                 should_convert++;
             }
  
@@ -644,10 +734,10 @@ int main (int argc, char *argv[])
             else if( h.out_pic.pic_buffer_type == PIC_TYPE_FLOAT && h.in_pic.pic_buffer_type == PIC_TYPE_FLOAT
                     && h.out_pic.chroma_format_idc  == CHROMA_444 &&  h.in_pic.chroma_format_idc  == CHROMA_444)
             {
-                dst_type = PIC_TYPE_FLOAT;
-                dst_chroma = CHROMA_444;
+       //         dst_type = PIC_TYPE_FLOAT;
+         //       dst_chroma = CHROMA_444;
         
-                int size = pic_width * pic_height * sizeof( unsigned short);
+                int size = pic_width * pic_height * sizeof(  float );
 
                 printf("copying in-->out pic float-buf\n" );
                 
@@ -655,45 +745,26 @@ int main (int argc, char *argv[])
                 memcpy(  h.out_pic.fbuf[1], h.in_pic.fbuf[1], size );
                 memcpy(  h.out_pic.fbuf[2], h.in_pic.fbuf[2], size );
             }
+            else if(  h.out_pic.chroma_format_idc  == CHROMA_444 &&  h.in_pic.chroma_format_idc  == CHROMA_444 )
+            {
+                int size = pic_width * pic_height * sizeof( unsigned short);
+                
+                printf("copying in-->out pic u16-buf\n" );
+                
+                memcpy(  h.out_pic.buf[0], h.in_pic.buf[0], size );
+                memcpy(  h.out_pic.buf[1], h.in_pic.buf[1], size );
+                memcpy(  h.out_pic.buf[2], h.in_pic.buf[2], size );
+    
+            }
+            
             
             if( ua->output_file_type == OUTPUT_FILE_TYPE_YUV && h.out_pic.pic_buffer_type == PIC_TYPE_U16 )
                 write_yuv( ua->dst_filename, &h,  &(h.out_pic) );
             else if( ua->output_file_type == OUTPUT_FILE_TYPE_DPX && h.out_pic.pic_buffer_type == PIC_TYPE_FLOAT )
             {
                 float *tmp_dpx_pic = (float *) malloc( 3 * exr_pic.width * exr_pic.height * sizeof( float ) );
-        
-#if 0
-                for(int j= 0;j < exr_pic.height; j++ )
-                {
-                    for(int i= 0;i < exr_pic.width; i++ )
-                    {
-                        float mod = ((float) i / (float) exr_pic.width);
-                        tmp_dpx_pic[ j*exr_pic.width*3 + i*3 + 0 ] = sin( mod * 3.141592653589793)  * 10000.0;
-                        tmp_dpx_pic[ j*exr_pic.width*3 + i*3 + 1 ] = cos( mod * 3.141592653589793)  * 10000.0;;
-                        tmp_dpx_pic[ j*exr_pic.width*3 + i*3 + 2 ] = mod * 100000.0;
-                    }
-                }
-#endif
-                
-#if 0
-                for(int j= 0;j < h.in_pic.height; j++ )
-                {
-                    for(int i= 0;i < h.in_pic.width; i++ )
-                    {
-//#if 0
-                        h.in_pic.fbuf[0][ j*h.in_pic.width + i ] *= 1000000000.0;
-                        h.in_pic.fbuf[1][ j*h.in_pic.width + i ] *= 1000000000.0;
-                        h.in_pic.fbuf[2][ j*h.in_pic.width + i ] *= 1000000000.0;
-//#endif
 
-//                        exr_pic.fbuf[0][ j*exr_pic.width + i ] *= 10000.0;
-  //                      exr_pic.fbuf[1][ j*exr_pic.width + i ] *= 10000.0;
-    //                    exr_pic.fbuf[2][ j*exr_pic.width + i ] *= 10000.0;
-                    }
-                }
-#endif
 
-//                planar_float_to_muxed_dpx_buf( tmp_dpx_pic, exr_pic.width, exr_pic.height, &exr_pic );
                 planar_float_to_muxed_dpx_buf( tmp_dpx_pic, exr_pic.width, exr_pic.height, &(h.in_pic) );
         
                 //#if 0

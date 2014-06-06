@@ -591,6 +591,8 @@ int convert( t_pic *out_pic, t_hdr *h, t_pic *in_pic )
             Subsample444to420_FIR( out_pic->buf[2], in_pic->buf[2], arraySizeX, arraySizeY, h->minCV, h->maxCV );
         }
         
+        out_pic->chroma_format_idc = CHROMA_420;
+        
     }
     else if( ua->dst_chroma_format_idc == CHROMA_444 )
     {
@@ -600,50 +602,24 @@ int convert( t_pic *out_pic, t_hdr *h, t_pic *in_pic )
         
         memcpy(  out_pic->buf[1], in_pic->buf[1], size );
         memcpy(  out_pic->buf[2], in_pic->buf[2], size );
-      
-#if 0
-        for( int j = 0; j< arraySizeY; j++ )
-        {
-            int addr = j*arraySizeX;
-            
-            for( int i = 0; i< arraySizeX; i++ )
-            {
-                out_pic->buf[0][ addr + i ] = in_pic->buf[0][ addr + i ];
-                in_pic->buf[0][ addr + i ] = in_pic->buf[0][ addr + i ];
-            }
-        }
-#endif
-        
     }
     
     
     int size = arraySizeY * arraySizeX * sizeof( unsigned short);
                                               
     memcpy(  out_pic->buf[0], in_pic->buf[0], size );
-                                                                                    
-#if 0
-    // didn't do anything to Y in this convert() routine, so copy it to dest.
-    for( int j = 0; j< arraySizeY; j++ )
-    {
-        int addr = j*arraySizeX;
-
-        for( int i = 0; i< arraySizeX; i++ )
-        {
-            out_pic->buf[0][ addr + i ] = in_pic->buf[0][ addr + i ];
-        }
-    }
-#endif
     
     
-    h->out_pic.width = arraySizeX;
-    h->out_pic.height = arraySizeY;
-    h->out_pic.bit_depth = ua->dst_bit_depth;
-    h->out_pic.matrix_coeffs = ua->dst_matrix_coeffs;
-    h->out_pic.video_full_range_flag = ua->dst_video_full_range_flag;
-    h->out_pic.chroma_format_idc = CHROMA_420;
-    h->out_pic.transfer_characteristics = ua->dst_transfer_characteristics;
-    h->out_pic.colour_primaries = ua->dst_colour_primaries;
-    h->out_pic.chroma_sample_loc_type = 0;
+    
+//    h->out_pic.width = arraySizeX;
+//    h->out_pic.height = arraySizeY;
+//    h->out_pic.bit_depth = ua->dst_bit_depth;
+//    h->out_pic.matrix_coeffs = ua->dst_matrix_coeffs;
+//    h->out_pic.video_full_range_flag = ua->dst_video_full_range_flag;
+//    h->out_pic.chroma_format_idc = CHROMA_420;
+//    h->out_pic.transfer_characteristics = ua->dst_transfer_characteristics;
+//    h->out_pic.colour_primaries = ua->dst_colour_primaries;
+//    h->out_pic.chroma_sample_loc_type = 0;
     
     return 0;
 }
@@ -755,9 +731,9 @@ int matrix_convert( t_pic *out_pic, t_hdr *h, t_pic *in_pic )
                 // perform conversion from src to dst transfer
                 
                 // frist, scale to real-value range (0.0 to 1.0)
-                G = G / 10000.0;
-                B = B / 10000.0;
-                R = R / 10000.0;
+   //             G = G / 10000.0;
+   //             B = B / 10000.0;
+   //             R = R / 10000.0;
 
                 // should probably use function pointers for this next step
                 
@@ -851,9 +827,9 @@ int matrix_convert( t_pic *out_pic, t_hdr *h, t_pic *in_pic )
                 // scale back
                 // this should be a variable and be checked against whether
                 // the transfer function assumes a fixed map to brightness
-                G = G * 10000.0;
-                B = B * 10000.0;
-                R = R * 10000.0;
+       //         G = G * 10000.0;
+       //         B = B * 10000.0;
+       //         R = R * 10000.0;
 
             
             }
