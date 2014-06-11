@@ -298,13 +298,15 @@ void Subsample444to420_FIR( unsigned short *dst_plane, unsigned short *src_plane
 
 
 
-int convert( t_pic *out_pic, t_hdr *h, t_pic *in_pic )
+int convert( pic_t *out_pic, hdr_t *h, pic_t *in_pic )
 {
-    t_user_args *ua = &(h->user_args);
+    user_args_t *ua = &(h->user_args);
     
     int arraySizeX = in_pic->width; // eg 3840
     int arraySizeY = in_pic->height;
 
+    clip_limits_t *clip = &(out_pic->clip);
+    
 //    t_pic *in_pic = &(h->in_pic);
 //    t_pic *out_pic = &(h->out_pic);
     
@@ -321,10 +323,10 @@ int convert( t_pic *out_pic, t_hdr *h, t_pic *in_pic )
     }
 //#endif
     
-    printf("DYUVPRIME2: %d\n", ua->dst_matrix_coeffs == MATRIX_YUVPRIME2 );
+    printf("DYUVPRIME2: %d\n", out_pic->matrix_coeffs == MATRIX_YUVPRIME2 );
     
-    if( ua->dst_matrix_coeffs == MATRIX_YUVPRIME2
-       && ua->dst_chroma_format_idc == CHROMA_420 )
+    if( out_pic->matrix_coeffs == MATRIX_YUVPRIME2
+       && out_pic->chroma_format_idc == CHROMA_420 )
     {
         // the samples loaded into the 2D arrays YP[][], Cb444[][] and Cr444[][] from the TIFF source are 16-bits
         // with a rho-gamma EOTF applied.
@@ -392,17 +394,17 @@ int convert( t_pic *out_pic, t_hdr *h, t_pic *in_pic )
         
         if( ua->chroma_resampler_type == 1 )
         {   // FIR
-            Subsample444to420_FIR( scaled_linear_Y_plane, linear_Y_plane, arraySizeX, arraySizeY,h->minCV,h->maxCV);
-            Subsample444to420_FIR( scaled_linear_Z_plane, linear_Z_plane, arraySizeX, arraySizeY,h->minCV,h->maxCV);
-            Subsample444to420_FIR( scaled_linear_X_plane, linear_X_plane, arraySizeX, arraySizeY,h->minCV,h->maxCV);
-            Subsample444to420_FIR( scaled_gamma_Y_tmp_plane, gamma_Y_tmp_plane, arraySizeX, arraySizeY,h->minCV,h->maxCV);
+            Subsample444to420_FIR( scaled_linear_Y_plane, linear_Y_plane, arraySizeX, arraySizeY,clip->minCV,clip->maxCV);
+            Subsample444to420_FIR( scaled_linear_Z_plane, linear_Z_plane, arraySizeX, arraySizeY,clip->minCV,clip->maxCV);
+            Subsample444to420_FIR( scaled_linear_X_plane, linear_X_plane, arraySizeX, arraySizeY,clip->minCV,clip->maxCV);
+            Subsample444to420_FIR( scaled_gamma_Y_tmp_plane, gamma_Y_tmp_plane, arraySizeX, arraySizeY,clip->minCV,clip->maxCV);
         }
         else if( ua->chroma_resampler_type == 0 )
         {
-            Subsample444to420_box( scaled_linear_Y_plane, linear_Y_plane, arraySizeX, arraySizeY,h->minCV,h->maxCV);
-            Subsample444to420_box( scaled_linear_Z_plane, linear_Z_plane, arraySizeX, arraySizeY,h->minCV,h->maxCV);
-            Subsample444to420_box( scaled_linear_X_plane, linear_X_plane, arraySizeX, arraySizeY,h->minCV,h->maxCV);
-            Subsample444to420_box( scaled_gamma_Y_tmp_plane, gamma_Y_tmp_plane, arraySizeX, arraySizeY,h->minCV,h->maxCV);
+            Subsample444to420_box( scaled_linear_Y_plane, linear_Y_plane, arraySizeX, arraySizeY,clip->minCV,clip->maxCV);
+            Subsample444to420_box( scaled_linear_Z_plane, linear_Z_plane, arraySizeX, arraySizeY,clip->minCV,clip->maxCV);
+            Subsample444to420_box( scaled_linear_X_plane, linear_X_plane, arraySizeX, arraySizeY,clip->minCV,clip->maxCV);
+            Subsample444to420_box( scaled_gamma_Y_tmp_plane, gamma_Y_tmp_plane, arraySizeX, arraySizeY,clip->minCV,clip->maxCV);
         }
         
         
@@ -575,26 +577,26 @@ int convert( t_pic *out_pic, t_hdr *h, t_pic *in_pic )
             free( scaled_gamma_Y_tmp_plane );
         
 
-    }else if( ua->dst_chroma_format_idc == CHROMA_420 )
+    }else if( out_pic->chroma_format_idc == CHROMA_420 )
     {
         
         
         if( ua->chroma_resampler_type == 0 )
         {
-            Subsample444to420_box( out_pic->buf[1], in_pic->buf[1],  arraySizeX, arraySizeY, h->minCV, h->maxCV );
-            Subsample444to420_box( out_pic->buf[2], in_pic->buf[2],  arraySizeX, arraySizeY, h->minCV, h->maxCV );
+            Subsample444to420_box( out_pic->buf[1], in_pic->buf[1],  arraySizeX, arraySizeY, clip->minCV, clip->maxCV );
+            Subsample444to420_box( out_pic->buf[2], in_pic->buf[2],  arraySizeX, arraySizeY, clip->minCV, clip->maxCV );
         }
         else
         {
             // Subsample =1 means use FIR filter
-            Subsample444to420_FIR( out_pic->buf[1], in_pic->buf[1], arraySizeX, arraySizeY, h->minCV, h->maxCV );
-            Subsample444to420_FIR( out_pic->buf[2], in_pic->buf[2], arraySizeX, arraySizeY, h->minCV, h->maxCV );
+            Subsample444to420_FIR( out_pic->buf[1], in_pic->buf[1], arraySizeX, arraySizeY, clip->minCV, clip->maxCV );
+            Subsample444to420_FIR( out_pic->buf[2], in_pic->buf[2], arraySizeX, arraySizeY, clip->minCV, clip->maxCV );
         }
         
         out_pic->chroma_format_idc = CHROMA_420;
         
     }
-    else if( ua->dst_chroma_format_idc == CHROMA_444 )
+    else if( out_pic->chroma_format_idc == CHROMA_444 )
     {
         // TODO: use pointer swaps, copies from a universal frame buffer pool
         //  in future, rather than needlessly copy pictures
@@ -627,19 +629,21 @@ int convert( t_pic *out_pic, t_hdr *h, t_pic *in_pic )
 
 // convert a 4:4:4 planar picture to 4:4:4 planar picture with a color difference matrix
 
-int matrix_convert( t_pic *out_pic, t_hdr *h, t_pic *in_pic )
+int matrix_convert( pic_t *out_pic, hdr_t *h, pic_t *in_pic )
 {
     // Read 16 bit tiff values into unsigned short into unsigned int for headroom
     // assumption is that RGB = X'Y'Z' from ODT output into 16 bit tiff (as 12 bit clamped values)
     // other tests will clamp ODT at 14 bits and maybe 10 bits
     // intermediate values for color differencing
     unsigned int Y;
-    long Dz, Dx,RC,BC;
+    long Cb, Cr,RC,BC;
     
-    out_pic->width = in_pic->width;
-    out_pic->width = in_pic->width;
+    clip_limits_t *clip = &(out_pic->clip);
     
-    t_user_args *ua = &(h->user_args);
+ //   out_pic->width = in_pic->width;
+ //   out_pic->width = in_pic->width;
+    
+    user_args_t *ua = &(h->user_args);
     
     int width = in_pic->width;
     int height = in_pic->height;
@@ -652,13 +656,13 @@ int matrix_convert( t_pic *out_pic, t_hdr *h, t_pic *in_pic )
     // set up alternate differencing equations for Y'DzwDxw
     float tmpF = 0.0;
     float P,Q,RR,S;
-    if ( ua->dst_matrix_coeffs == MATRIX_YDzDx_Y100) {
+    if ( out_pic->matrix_coeffs == MATRIX_YDzDx_Y100) {
         printf("Setting PQRS for 100nit PQ color difference point\n");
         P = -0.5;
         Q = 0.491722;
         RR = 0.5;
         S = -0.49495;
-    } else if( ua->dst_matrix_coeffs == MATRIX_YDzDx_Y500) {
+    } else if( out_pic->matrix_coeffs == MATRIX_YDzDx_Y500) {
         printf("Setting PQRS for 500nit PQ color difference point\n");
         P = -0.5;
         Q = 0.493393;
@@ -666,6 +670,22 @@ int matrix_convert( t_pic *out_pic, t_hdr *h, t_pic *in_pic )
         S = -0.49602;
     }
     
+    float range[MAX_CC];
+    float offset[MAX_CC];
+    
+    if( in_pic->transfer_characteristics != out_pic->transfer_characteristics )
+    {
+        // will convert transfer
+        for(int cc=0;cc<MAX_CC;cc++)
+        {
+            range[cc] = in_pic->stats.estimated_ceiling[cc] - in_pic->stats.estimated_floor[cc];
+            offset[cc] = in_pic->stats.estimated_floor[cc];
+            
+            printf("matrix_convert(cc=%d) in_pic: avg(%d) range(%f) offset(%f)\n", cc,
+                   in_pic->stats.i_avg[cc], range[cc], offset[cc] );
+        }
+    }
+ 
     
     // read lines to cover arraySizeY number of lines (e.g. 2160)
     for (int y=0;  y < height; y++)
@@ -703,7 +723,8 @@ int matrix_convert( t_pic *out_pic, t_hdr *h, t_pic *in_pic )
                 // we could use stats in read_exr to autoscale..
 
             }
-            else if(  in_pic->pic_buffer_type == PIC_TYPE_U16 )
+//            else if(  in_pic->pic_buffer_type == PIC_TYPE_U16 )
+            else 
             {
                 G = (float) in_pic->buf[0][addr+x];
                 B = (float) in_pic->buf[1][addr+x];
@@ -722,18 +743,18 @@ int matrix_convert( t_pic *out_pic, t_hdr *h, t_pic *in_pic )
             // this simulates what odt_PQ10k2020.ctl does here..
             
             
-            int src_transfer = ua->src_transfer_characteristics;
+            int src_transfer = h->in_pic.transfer_characteristics;
             
             
             // step 1: convert
-            if( src_transfer != ua->dst_transfer_characteristics )
+            if( src_transfer != out_pic->transfer_characteristics )
             {
                 // perform conversion from src to dst transfer
                 
                 // frist, scale to real-value range (0.0 to 1.0)
-   //             G = G / 10000.0;
-   //             B = B / 10000.0;
-   //             R = R / 10000.0;
+                G = (G - offset[0])/range[0];
+                B = (B - offset[1])/range[1];
+                R = (R - offset[2])/range[2];
 
                 // should probably use function pointers for this next step
                 
@@ -749,7 +770,7 @@ int matrix_convert( t_pic *out_pic, t_hdr *h, t_pic *in_pic )
                         
                         src_transfer = TRANSFER_LINEAR;
                     }
-                    else if( ua->dst_transfer_characteristics == TRANSFER_RHO_GAMMA )
+                    else if( src_transfer == TRANSFER_RHO_GAMMA )
                     {
                         G = RHO_GAMMA_f( G );
                         B = RHO_GAMMA_f( B );
@@ -776,17 +797,17 @@ int matrix_convert( t_pic *out_pic, t_hdr *h, t_pic *in_pic )
                         src_transfer =TRANSFER_LINEAR;
                     }
                     else
-                        printf("WARNING: src_transfer_characteristics (%d) not supported (yet)\n", ua->src_transfer_characteristics );
+                        printf("WARNING: src_transfer_characteristics (%d) not supported (yet)\n", h->in_pic.transfer_characteristics );
                     
                 }
                 
                 // step 2: convert to transfer desired for output
                 
                 if( src_transfer == TRANSFER_LINEAR &&
-                   ua->dst_transfer_characteristics != TRANSFER_LINEAR )
+                   out_pic->transfer_characteristics != TRANSFER_LINEAR )
                 {
                     // convert to non-linear
-                    if( ua->dst_transfer_characteristics == TRANSFER_PQ )
+                    if( out_pic->transfer_characteristics == TRANSFER_PQ )
                     {
                         G = PQ10000_r( G );
                         B = PQ10000_r( B );
@@ -794,7 +815,7 @@ int matrix_convert( t_pic *out_pic, t_hdr *h, t_pic *in_pic )
                         
                         src_transfer = TRANSFER_PQ;
                     }
-                    else if( ua->dst_transfer_characteristics == TRANSFER_RHO_GAMMA )
+                    else if( out_pic->transfer_characteristics == TRANSFER_RHO_GAMMA )
                     {
                         G = RHO_GAMMA_r( G );
                         B = RHO_GAMMA_r( B );
@@ -804,10 +825,10 @@ int matrix_convert( t_pic *out_pic, t_hdr *h, t_pic *in_pic )
                     }
                     // these transfers are not exactly the same but close enough
                     // for now..
-                    else if( ua->dst_transfer_characteristics == TRANSFER_BT709
-                        || ua->dst_transfer_characteristics == TRANSFER_BT2020_10bit
-                        || ua->dst_transfer_characteristics == TRANSFER_BT2020_12bit
-                        || ua->dst_transfer_characteristics == TRANSFER_BT601 )
+                    else if( out_pic->transfer_characteristics == TRANSFER_BT709
+                        || out_pic->transfer_characteristics == TRANSFER_BT2020_10bit
+                        || out_pic->transfer_characteristics == TRANSFER_BT2020_12bit
+                        || out_pic->transfer_characteristics == TRANSFER_BT601 )
                     {
                         
                         const float DISPGAMMA = 2.4;
@@ -818,18 +839,19 @@ int matrix_convert( t_pic *out_pic, t_hdr *h, t_pic *in_pic )
                         B = bt1886_r( B, DISPGAMMA, L_W, L_B);
                         R = bt1886_r( R, DISPGAMMA, L_W, L_B);
                         
-                        src_transfer = ua->dst_transfer_characteristics;
+                        src_transfer = out_pic->transfer_characteristics;
                     }
                     else
-                        printf("WARNING: dst_transfer_characteristics(%d) not supported (yet)\n",ua->dst_transfer_characteristics );
+                        printf("WARNING: dst_transfer_characteristics(%d) not supported (yet)\n",
+                               out_pic->transfer_characteristics );
                 }
 
                 // scale back
                 // this should be a variable and be checked against whether
                 // the transfer function assumes a fixed map to brightness
-       //         G = G * 10000.0;
-       //         B = B * 10000.0;
-       //         R = R * 10000.0;
+                G = G*range[0] + offset[0];
+                B = B*range[1] + offset[1];
+                R = R*range[2] + offset[2];
 
             
             }
@@ -837,66 +859,69 @@ int matrix_convert( t_pic *out_pic, t_hdr *h, t_pic *in_pic )
                
             if( in_pic->pic_buffer_type == PIC_TYPE_U16 )
             {
-                if( ua->dst_matrix_coeffs == MATRIX_GBR ||
-                   ua->dst_matrix_coeffs == MATRIX_UNSPECIFIED
-                   || ua->dst_matrix_coeffs == MATRIX_RESERVED  )
+                if( out_pic->matrix_coeffs == MATRIX_GBR ||
+                   out_pic->matrix_coeffs == MATRIX_UNSPECIFIED
+                   || out_pic->matrix_coeffs == MATRIX_RESERVED  )
                                           
-                {
+                {  // RGB
                     Y = (unsigned int)G;
-                    Dz = (unsigned int)B;
-                    Dx = (unsigned int)R;
+                    Cb = (unsigned int)B;
+                    Cr = (unsigned int)R;
                 }
-                else
+                else  // color difference space
                 {
-                    if( ua->dst_matrix_coeffs == MATRIX_YDzDx ) {
+                    if( out_pic->matrix_coeffs == MATRIX_YDzDx ) {
                 
                         Y = (unsigned int) G;
-                        Dz = (int)(-G/2.0  + B/2.0 +0.5); //-(int)((G+1)>>1) + (int)((B+1)>>1);
-                        Dx =  (int)(-G/2.0 +R/2.0 +0.5); //(int)((R+1)>>1) - (int)((G+1)>>1);
+                        Cb = (int)(-G/2.0  + B/2.0 +0.5); // Dz: -(int)((G+1)>>1) + (int)((B+1)>>1);
+                        Cr =  (int)(-G/2.0 +R/2.0 +0.5);  // Dx: (int)((R+1)>>1) - (int)((G+1)>>1);
                 //printf("Y: %d, Dz: %d, Dz: %d\n",Y,Dz,Dx);
                 
-                    } else if( ua->dst_matrix_coeffs == MATRIX_BT2020nc ){
+                    } else if( out_pic->matrix_coeffs == MATRIX_BT2020nc ){
                         tmpF = (0.2627*R + 0.6780*G + 0.0593*B) +0.5;
                         Y = (unsigned int)(tmpF);
-                        Dz = (int)((B - tmpF)/1.8814 + 0.5);
-                        Dx = (int)((R - tmpF)/1.4746 + 0.5);
-                    } else if( ua->dst_matrix_coeffs == MATRIX_BT709 ) {
+                        Cb = (int)((B - tmpF)/1.8814 + 0.5);
+                        Cr = (int)((R - tmpF)/1.4746 + 0.5);
+                    } else if( out_pic->matrix_coeffs == MATRIX_BT709 ) {
                         tmpF = (0.2126*R + 0.7152*G + 0.0722*B) +0.5;
                         Y = (unsigned int)(tmpF);
-                        Dz = (int)((B - tmpF)/1.8556 + 0.5);
-                        Dx = (int)((R - tmpF)/1.5748 + 0.5);
-                    } else if(ua->dst_matrix_coeffs == MATRIX_YDzDx_Y100
-                      || ua->dst_matrix_coeffs == MATRIX_YDzDx_Y500) {
+                        Cb = (int)((B - tmpF)/1.8556 + 0.5);
+                        Cr = (int)((R - tmpF)/1.5748 + 0.5);
+                    } else if(out_pic->matrix_coeffs == MATRIX_YDzDx_Y100
+                      || out_pic->matrix_coeffs == MATRIX_YDzDx_Y500) {
                         Y = (unsigned int)(G);
-                        Dz = (int)( P *G + Q*B + 0.5);
-                        Dx = (int)( RR*R + S*G + 0.5);
-                    } else if(ua->dst_matrix_coeffs == MATRIX_YUVPRIME2) {
+                        Cb = (int)( P *G + Q*B + 0.5);
+                        Cr = (int)( RR*R + S*G + 0.5);
+                    } else if(out_pic->matrix_coeffs == MATRIX_YUVPRIME2) {
                         Y = (unsigned int) (G);
-                        Dz = (unsigned int) (B);
-                        Dx = (unsigned int) (R);
+                        Cb = (unsigned int) (B);
+                        Cr = (unsigned int) (R);
                     } else {
                         printf("Can't determine color difference to use?\n\n");
                         exit(0);
                     }
+ 
+                    Cb = Cb + clip->Half - 1;
+                    Cr = Cr + clip->Half - 1;
                 }
                                           
-                Dz = Dz + h->Half - 1;
-                Dx = Dx + h->Half - 1;
             
             //printf("Y: %d, Dz: %d, Dz: %d\n",Y,Dz,Dx);
             // clamp to full range
-                if( Y > h->maxCV) Y=h->maxCV;
-                if( Dz > h->maxCV) Dz=h->maxCV;
-                if( Dz < h->minCV) Dz=h->minCV;
-                if( Dx > h->maxCV) Dx=h->maxCV;
-                if( Dx < h->minCV) Dx=h->minCV;
+                if( Y > clip->maxCV) Y=clip->maxCV;
+                if( Y < clip->minCV) Y=clip->minCV;
+                
+                if( Cb > clip->maxCV) Cb=clip->maxCV;
+                if( Cb < clip->minCV) Cb=clip->minCV;
+                if( Cr > clip->maxCV) Cr=clip->maxCV;
+                if( Cr < clip->minCV) Cr=clip->minCV;
             //printf("Y: %d, Dz: %d, Dz: %d\n",Y,Dz,Dx);
             
                 int dst_addr =  y*width + x;
             
                 out_pic->buf[0][ dst_addr ]= Y;
-                out_pic->buf[1][ dst_addr ]= Dz;
-                out_pic->buf[2][ dst_addr ]= Dx;
+                out_pic->buf[1][ dst_addr ]= Cb;
+                out_pic->buf[2][ dst_addr ]= Cr;
             }
             else if( in_pic->pic_buffer_type == PIC_TYPE_FLOAT)
             {

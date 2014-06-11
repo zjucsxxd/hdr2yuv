@@ -8,10 +8,10 @@ all:  hdr2yuv
 
 objects = hdr2yuv.o exr.o tiff.o common.o cv.o convert.o dpx.o
 
-libs=-lImath -lHalf -lIex -lIexMath -lIlmThread -lIlmImf -lz 
+libs=-lImath -lHalf -lIex -lIexMath -lIlmThread -lIlmImf -lz -ltiff
 
 hdr2yuv:  $(objects) 
-	$(CC) -o hdr2yuv $(objects) -ltiff $(libs)
+	$(CC) -o hdr2yuv $(objects) $(libs) 
 
 hdr2yuv.o:  hdr2yuv.cpp
 	$(CC) $(CFLAGS) hdr2yuv.cpp

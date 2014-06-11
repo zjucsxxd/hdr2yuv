@@ -101,7 +101,7 @@ int write_exr_file(
     int pic_width,
     int pic_height,
     int half_float_flag,
-    t_pic *src_pic )
+    pic_t *src_pic )
 {
     Array2D<Rgba> half_float_pixels;
 
@@ -135,7 +135,7 @@ int write_exr_file(
 
 // read exr and convert to universal hdr2yuv picture buffer
 
-void read_exr( t_pic *dst_pic, char *filename )
+void read_exr( pic_t *dst_pic, char *filename )
 {
     int measure_exr_stats = 1;
     

@@ -23,13 +23,13 @@ typedef struct
         int MaxSampleValue;
         int RowsPerStrip;
         int NumStrips;
-} t_tiff_info;
+} tiff_info_t;
 
 
 
-void get_tiff_info( TIFF *tif, t_tiff_info *in ) 
+void get_tiff_info( TIFF *tif, tiff_info_t *in )
 {
-  memset ( in, 0, sizeof( t_tiff_info));
+  memset ( in, 0, sizeof( tiff_info_t));
 
   TIFFGetField( tif, TIFFTAG_IMAGEWIDTH, &(in->ImageWidth));
   TIFFGetField( tif, TIFFTAG_IMAGELENGTH, &(in->ImageLength));
@@ -51,19 +51,21 @@ void get_tiff_info( TIFF *tif, t_tiff_info *in )
 }
 
 
-int read_tiff( t_pic *tif_pic, t_hdr *h, char* filename )
+int read_tiff( pic_t *tif_pic, char* filename, hdr_t *h )
 {
-    t_user_args *ua = &(h->user_args);
+ //   t_user_args *ua = &(h->user_args);
     
-    int pic_width = ua->src_pic_width;
-    int pic_height = ua->src_pic_height;
-    int bit_depth = ua->src_bit_depth;
-    int matrix_coeffs = ua->src_matrix_coeffs;
-    int video_full_range_flag =ua->src_video_full_range_flag;
-    int chroma_format_idc = ua->src_chroma_format_idc;
-    int transfer_characteristics = ua->src_transfer_characteristics;
-    int colour_primaries = ua->src_colour_primaries;
-    int chroma_sample_loc_type = ua->src_chroma_sample_loc_type;
+    int pic_width = tif_pic->width;
+    int pic_height = tif_pic->height;
+    int bit_depth = tif_pic->bit_depth;
+    int matrix_coeffs = tif_pic->matrix_coeffs;
+    int video_full_range_flag = tif_pic->video_full_range_flag;
+    int chroma_format_idc = tif_pic->chroma_format_idc;
+    int transfer_characteristics = tif_pic->transfer_characteristics;
+    int colour_primaries = tif_pic->colour_primaries;
+    int chroma_sample_loc_type = tif_pic->chroma_sample_loc_type;
+    
+    clip_limits_t *clip = &(tif_pic->clip);
     
     TIFF* tif = TIFFOpen( filename,  "r");
     
@@ -78,7 +80,7 @@ int read_tiff( t_pic *tif_pic, t_hdr *h, char* filename )
         return(1);
     }
     
-    t_tiff_info ti;
+    tiff_info_t ti;
     get_tiff_info( tif, &ti );
     
     tdata_t buf1;
@@ -105,11 +107,11 @@ int read_tiff( t_pic *tif_pic, t_hdr *h, char* filename )
     // shift down to 10,12,14 bits and write out into YUV planar file
     
     
-    printf("full_range: %d\n", ua->dst_video_full_range_flag );
-    printf("alpha_channel: %d\n", ua->alpha_channel );
-    printf("chroma_resampler_type: %d\n", ua->chroma_resampler_type );
+    printf("full_range: %d\n", tif_pic->video_full_range_flag );
+//    printf("alpha_channel: %d\n", ua->alpha_channel );
+//    printf("chroma_resampler_type: %d\n", ua->chroma_resampler_type );
     
-    
+#if 0
     if(  ua->dst_matrix_coeffs == MATRIX_BT709 )
         printf("processesing for Rec. 709\n");
     else if(  ua->dst_matrix_coeffs == MATRIX_BT2020nc )
@@ -122,11 +124,11 @@ int read_tiff( t_pic *tif_pic, t_hdr *h, char* filename )
         printf("processesing for YDzDx 500 nits average\n");
     else if(  ua->dst_matrix_coeffs == MATRIX_YDzDx )
         printf("processesing for YDzDx\n");
+#endif
     
-    
-    if(ua->cutout_hd)printf("Cutting out HD1920x1080\n");
-    if(ua->cutout_qhd)printf("Cutting out HD960x540\n");
-    if(ua->alpha_channel)printf("Assuming TIF has ALPHA channel\n");
+    if( h->user_args.cutout_hd)printf("Cutting out HD1920x1080\n");
+    if( h->user_args.cutout_qhd)printf("Cutting out HD960x540\n");
+    if( h->user_args.alpha_channel)printf("Assuming TIF has ALPHA channel\n");
     
     
     
@@ -162,8 +164,8 @@ int read_tiff( t_pic *tif_pic, t_hdr *h, char* filename )
     
     
     // Adjust stripstart to cut out if needed
-    if(ua->cutout_hd) stripStart = (numStrips - 1080)/2;
-    if(ua->cutout_qhd)stripStart = (numStrips - 540)/2;
+    if(h->user_args.cutout_hd) stripStart = (numStrips - 1080)/2;
+    if(h->user_args.cutout_qhd)stripStart = (numStrips - 540)/2;
     
     
     // Adjust stripsize to 3840x4x2bytes 3840xnumChanx2
@@ -178,11 +180,11 @@ int read_tiff( t_pic *tif_pic, t_hdr *h, char* filename )
             packed_sample_start_idx = 0;
         
         // if HD cutout adjust:
-        if(ua->cutout_hd)
+        if(h->user_args.cutout_hd)
             packed_sample_start_idx = (stripsize - 1920*numChan2)/2;
         
         // if qHD cutout adjust:
-        if(ua->cutout_qhd)
+        if(h->user_args.cutout_qhd)
             packed_sample_start_idx = (stripsize - 960*numChan2)/2;
         
         
@@ -212,9 +214,9 @@ int read_tiff( t_pic *tif_pic, t_hdr *h, char* filename )
     tif_pic->buf[2] = (unsigned short*) malloc(arraySizeX*arraySizeY*sizeof(unsigned short));
     
     
-    h->in_pic.buf[0] = (unsigned short*) malloc(arraySizeX*arraySizeY*sizeof(unsigned short));
-    h->in_pic.buf[1] = (unsigned short*) malloc(arraySizeX*arraySizeY*sizeof(unsigned short));
-    h->in_pic.buf[2] = (unsigned short*) malloc(arraySizeX*arraySizeY*sizeof(unsigned short));
+ //   h->in_pic.buf[0] = (unsigned short*) malloc(arraySizeX*arraySizeY*sizeof(unsigned short));
+ //   h->in_pic.buf[1] = (unsigned short*) malloc(arraySizeX*arraySizeY*sizeof(unsigned short));
+ //   h->in_pic.buf[2] = (unsigned short*) malloc(arraySizeX*arraySizeY*sizeof(unsigned short));
     
     
     // Reduce numStrips to what is needed to center cut:
@@ -237,7 +239,7 @@ int read_tiff( t_pic *tif_pic, t_hdr *h, char* filename )
             uint32 B = static_cast<unsigned short *>(buf1)[pixel/2+2];
             
             
-            if(ua->alpha_channel)
+            if(h->user_args.alpha_channel)
                 A = static_cast<unsigned short *>(buf1)[pixel/2+3];
             
 #if 0
@@ -252,14 +254,14 @@ int read_tiff( t_pic *tif_pic, t_hdr *h, char* filename )
 #endif
             
             // Insure RGB are clipped to video range if required:
-            if(ua->dst_video_full_range_flag == 0) {
-                R = (R< h->minVR) ? h->minVR : R;
-                G = (G< h->minVR) ? h->minVR : G;
-                B = (B< h->minVR) ? h->minVR : B;
+            if(tif_pic->video_full_range_flag == 0) {
+                R = (R< clip->minVR) ? clip->minVR : R;
+                G = (G< clip->minVR) ? clip->minVR : G;
+                B = (B< clip->minVR) ? clip->minVR : B;
                 
-                R = (R> h->maxVR) ? h->maxVR : R;
-                G = (G> h->maxVR) ? h->maxVR : G;
-                B = (B> h->maxVR) ? h->maxVR : B;
+                R = (R> clip->maxVR) ? clip->maxVR : R;
+                G = (G> clip->maxVR) ? clip->maxVR : G;
+                B = (B> clip->maxVR) ? clip->maxVR : B;
                 
                 
                 // TODO: add a check to see whether or not input was full range against ua->src_video_full_range_flag
@@ -324,34 +326,44 @@ int read_tiff( t_pic *tif_pic, t_hdr *h, char* filename )
 // that is why write_yuv() is here.
 // only tiff.cpp is supposed to link to the tiff library, not other .cpp files.
 
-int write_yuv( char *filename, t_hdr *h, t_pic *pic )
+int write_yuv( char *filename, hdr_t *h, pic_t *pic )
 {
   //      t_user_args *ua = &(h->user_args);
     
    // t_pic *pic = &(h->out_pic);
     ofstream yuvOut;
-    int arraySizeX = pic->width; // eg 3840
-    int arraySizeY = pic->height;
+  //  int arraySizeX = pic->width; // eg 3840
+  //  int arraySizeY = pic->height;
     int bit_depth = pic->bit_depth;
     int matrix_coeffs = pic->matrix_coeffs;
     int video_full_range_flag = pic->video_full_range_flag;
     
-    int arraySizeXH = arraySizeX/2; // eg 1920 cols
-    int arraySizeYH = arraySizeY/2; // eg 1080 rows
+  //  int arraySizeXC = arraySizeX/2; // eg 1920 cols
+  ///  int arraySizeYC = arraySizeY/2; // eg 1080 rows
     
     // Write YUV Frame
     // arrar to store line of output for writing process
     unsigned short  *Line;
-    t_user_args *ua = &(h->user_args);
+    user_args_t *ua = &(h->user_args);
     // set output line array to unsigned short
-    Line =  (unsigned short*) malloc(arraySizeX*sizeof(unsigned short));
+    Line =  (unsigned short*) malloc(pic->width*sizeof(unsigned short));
     
+    
+    // TODO: make this pic->bit_depth
+    int down_shift = (pic->bit_depth - h->out_pic.bit_depth);
+    
+    if( down_shift < 0 )
+        
+    {
+        printf("ERROR: dst bitdepth(%d) > src bitdepth(%d)\n", h->out_pic.bit_depth, pic->bit_depth );
+        exit(0);
+    }
     
     {
         static char tbuf[256];
+#if 0
         static char prefix[256];
         
-#if 0
         if( matrix_coeffs == MATRIX_YDzDx )
             strcat( prefix, "YDzDx");
         else if( matrix_coeffs == MATRIX_YDzDx_Y100 )
@@ -389,78 +401,105 @@ int write_yuv( char *filename, t_hdr *h, t_pic *pic )
 
     // write planer output:
     
-    printf("writing %d x %d  pixels at %d bit_depth (from %d bits)\n", pic->width, pic->height, pic->bit_depth, ua->dst_bit_depth);
+    printf("writing %d x %d  pixels at %d bit_depth (from %d bits)\n", pic->width, pic->height, pic->bit_depth, h->out_pic.bit_depth);
     
     
     // TODO: move the clipping operation outside of writetiff
     
     // limit video range at 16 bits
     // shift data down to desired bit depth
-    for(unsigned short r = 0; r < arraySizeY;r++)
+    
+//    pic->plane[0].width;
+  
+    int ph = pic->plane[0].height;
+    int pw = pic->plane[0].width;
+    
+    for(int r = 0; r <ph ;r++)
     {
-        unsigned short *Yptr = &(pic->buf[0][ r*arraySizeX ]);
+        unsigned short *Yptr = &(pic->buf[0][ r*pw ]);
 
-        for(unsigned short c = 0; c < arraySizeX;c++)
+        for(int c = 0; c < pw; c++)
         {
             // Fill line array
             // (10 bits) Line[c] = (((YP[c][r]+2)>>2));
             // limit to video range (for 16 bits then shift later)
+            unsigned short Y =  Yptr[c];
+
+#ifdef CLIP_TIFF
             if( video_full_range_flag==0) {
-                unsigned short Y =  Yptr[c];
-                Y = (Y < h->minVR) ? h->minVR : Y;
+               Y = (Y < h->minVR) ? h->minVR : Y;
                 Y = (Y > h->maxVR) ? h->maxVR : Y;
-                Yptr[c] = Y;
             }
-            Line[c] = Yptr[c]>>(pic->bit_depth - ua->dst_bit_depth);
-            //printf(" Line[%d] = %d,  YP[%d][%d] = %d  ",c,Line[c],c,r,YP[c][r]);
+#endif
+
+            Yptr[c] = Y;
+            Y = Y >> down_shift;
+            Line[c] = Y;
+            //printf(" Line[%d] = %d,  YP[%d][%d] = %d  ",c,Line[c],c,r/Users/chadfogg/Documents/Src/Traffic_2560x1600_420p_10bits.yuv,YP[c][r]);
         }
         //    write line arrary yuvOut.write(
-        yuvOut.write((char *)Line,2*arraySizeX);
+        yuvOut.write((char *)Line,2*pw);
     }
+    
+    ph = pic->plane[1].height;
+    pw = pic->plane[1].width;
+    
     // Dz of 420
-    for(unsigned short r = 0; r < arraySizeY/2;r++)
+    for(int r = 0; r < ph; r++)
     {
-        unsigned short *CbPtr = &(pic->buf[1][ r*arraySizeX/2 ]);
+        
+        unsigned short *CbPtr = &(pic->buf[1][ r * pw ]);
 
-        for(unsigned short c = 0; c < arraySizeX/2;c++)
+        for(int c = 0; c < pw; c++ )
         {
             // Fill line array
             // (10 bits) Line[c] = (((DzP[c][r]+2)>>2));
-            
+       
+            unsigned short Cb = CbPtr[c];
+
+#ifdef CLIP_TIFF
             if(video_full_range_flag==0) {
-                unsigned short Cb = CbPtr[c];
                 
                 Cb = (Cb < h->minVRC) ? h->minVRC : Cb;
                 Cb = (Cb > h->maxVRC) ? h->maxVRC : Cb;
-                CbPtr[c] = Cb;
             }
-            Line[c] = CbPtr[c] >>(pic->bit_depth - ua->dst_bit_depth);
+#endif
+            Cb = Cb >> down_shift;
+            CbPtr[c] = Cb;
+            Line[c] = Cb;
         }
         //    write line arrary yuvOut.write(
-        yuvOut.write((char *)Line,2*arraySizeXH);
+        yuvOut.write((char *)Line,2*pw);
     }
-    
-    // Dx of 420
-    for(unsigned short r = 0; r < arraySizeY/2;r++)
-    {
-        unsigned short *CrPtr = &(pic->buf[2][ r*arraySizeX/2 ]);
 
-        for(unsigned short c = 0; c < arraySizeX/2;c++)
+    ph = pic->plane[2].height;
+    pw = pic->plane[2].width;
+
+    // Dx of 420
+    for(int r = 0; r < ph;r++)
+    {
+        unsigned short *CrPtr = &(pic->buf[2][ r*pw ]);
+
+        for( int  c = 0; c < pw;c++)
         {
             // Fill line array
             // (10 bits) Line[c] = (((DxP[c][r]+2)>>2));
             
+            unsigned short Cr = CrPtr[c];
+
+#ifdef CLIP_TIFF
             if(video_full_range_flag==0) {
-                unsigned short Cr = CrPtr[c];
             
                 Cr = (Cr < h->minVRC) ? h->minVRC : Cr;
                 Cr = (Cr > h->maxVRC) ? h->maxVRC : Cr;
-                CrPtr[c] = Cr;
             }
-            Line[c] = CrPtr[c] >>(pic->bit_depth - ua->dst_bit_depth);
+#endif
+            Cr = Cr >> down_shift;
+            CrPtr[c] = Cr;
+            Line[c] = Cr;
         }
         //    write line arrary yuvOut.write(
-        yuvOut.write((char *)Line,2*arraySizeXH);
+        yuvOut.write((char *)Line,2*pw);
     }
     yuvOut.close(); // close file
     

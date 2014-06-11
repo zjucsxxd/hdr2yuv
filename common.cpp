@@ -9,7 +9,7 @@
 
 // DPX is in R,G,B multiplexed sample order,  not G,B,R   or planar
 
-int muxed_dpx_to_planar_float_buf( t_pic *dst, int width, int height, float *src )
+int muxed_dpx_to_planar_float_buf( pic_t *dst, int width, int height, float *src )
 {
     int pic_size = height*width;
 
@@ -23,7 +23,7 @@ int muxed_dpx_to_planar_float_buf( t_pic *dst, int width, int height, float *src
 
 
 
-int planar_float_to_muxed_dpx_buf( float *dst, int width, int height, t_pic *src )
+int planar_float_to_muxed_dpx_buf( float *dst, int width, int height, pic_t *src )
 {
     int pic_size = height*width;
 

@@ -53,48 +53,26 @@ void print_help( void )
     
 }
 
-int parse_options( t_user_args *par, int argc,  char *argv[] )
+int parse_options( hdr_t *h, int argc,  char *argv[] )
 {
-//    t_user_args *par = &(h->args);
+    user_args_t *par = &(h->user_args);
     int arg_errors =0;
 
+    h->out_pic.chroma_format_idc = h->out_pic.chroma_sample_loc_type = h->out_pic.video_full_range_flag = -1;
+    h->out_pic.transfer_characteristics = h->out_pic.matrix_coeffs = h->out_pic.colour_primaries = -1;
+    
+    int src_filename_parsed = 0;
+    int dst_filename_parsed = 0;
+    
     // default values overriden first by parse_options() then read_tiff() or exr
-    par->src_pic_width = 1920;
-    par->src_pic_height = 1080;
-    par->src_chroma_format_idc = CHROMA_444;
-    par->src_bit_depth = 16;
-    par->src_video_full_range_flag =0;
-    par->src_colour_primaries = COLOR_PRIMARY_XYZ;
-    par->src_transfer_characteristics = TRANSFER_PQ;
-    par->src_matrix_coeffs = MATRIX_GBR;
-    par->src_chroma_sample_loc_type = 0;
-    
-    par->dst_pic_width = 1920;
-    par->dst_pic_height = 1080;
-    par->dst_chroma_format_idc = CHROMA_420;
-    par->dst_bit_depth = 10;
-    par->dst_video_full_range_flag =0;
-    par->dst_colour_primaries = COLOR_PRIMARY_BT2020_10bit;
-    par->dst_transfer_characteristics = TRANSFER_BT2020_10bit;
-    par->dst_matrix_coeffs = MATRIX_BT2020nc;
-    par->dst_chroma_sample_loc_type = 0;
-    
-    par->cutout_hd = 0;
-    par->cutout_qhd = 0;
-    par->alpha_channel = 0;
-    
-    par->src_filename = NULL;
-    par->dst_filename = NULL;
-    
-    par->input_file_type = INPUT_FILE_TYPE_UNDEFINED;
-    par->output_file_type = OUTPUT_FILE_TYPE_UNDEFINED;
-    // TODO: use C++ map 
+ 
+    // TODO: use C++ map
     for( int i=1; i < argc; i++)
     {
         if( !strcmp( argv[i], "--src_filename") && (i<argc) )
         {
             par->src_filename = argv[i+1];
-            
+            src_filename_parsed++;
             i++;
         }
         else if( !strcmp( argv[i], "--help") && (i<argc) )
@@ -104,46 +82,47 @@ int parse_options( t_user_args *par, int argc,  char *argv[] )
         else if( !strcmp( argv[i], "--dst_filename") && (i<argc) )
         {
             par->dst_filename = argv[i+1];
+            dst_filename_parsed++;
             i++;
         }
         else if( !strcmp( argv[i], "--src_pic_width") && (i<argc) )
         {
-            par->src_pic_width = atoi( argv[i+1] );
+            h->in_pic.width = atoi( argv[i+1] );
             i++;
         }
         else if( !strcmp( argv[i], "--src_pic_height") && (i<argc) )
         {
-            par->src_pic_height = atoi( argv[i+1] );
+            h->in_pic.height = atoi( argv[i+1] );
             i++;
         }
         else if( !strcmp( argv[i], "--dst_pic_width") && (i<argc) )
         {
-            par->dst_pic_width = atoi( argv[i+1] );
+            h->out_pic.width = atoi( argv[i+1] );
             i++;
         }
         else if( !strcmp( argv[i], "--dst_pic_height") && (i<argc) )
         {
-            par->dst_pic_height = atoi( argv[i+1] );
+            h->out_pic.height = atoi( argv[i+1] );
             i++;
         }
         else if( !strcmp( argv[i],  "--src_bit_depth") && (i<argc) )
         {
-            par->src_bit_depth = atoi( argv[i+1] );
+            h->in_pic.bit_depth = atoi( argv[i+1] );
             i++;
         }
         else if( !strcmp( argv[i],  "--dst_bit_depth") && (i<argc) )
         {
-            par->dst_bit_depth = atoi( argv[i+1] );
+            h->out_pic.bit_depth = atoi( argv[i+1] );
             i++;
         }
         else if( !strcmp( argv[i],  "--dst_chroma_format_idc") && (i<argc) )
         {
-            par->dst_chroma_format_idc = atoi( argv[i+1] );
+            h->out_pic.chroma_format_idc = atoi( argv[i+1] );
             i++;
         }
         else if( !strcmp( argv[i],  "--src_chroma_format_idc") && (i<argc) )
         {
-            par->src_chroma_format_idc = atoi( argv[i+1] );
+            h->in_pic.chroma_format_idc = atoi( argv[i+1] );
             i++;
         }
         else if( !strcmp( argv[i],  "--src_start_frame") && (i<argc) )
@@ -163,22 +142,22 @@ int parse_options( t_user_args *par, int argc,  char *argv[] )
         }
         else if( !strcmp( argv[i], "--src_colour_primaries") && (i < argc) )
         {
-            par->src_colour_primaries = atoi( argv[i+1] );
+            h->in_pic.colour_primaries = atoi( argv[i+1] );
             i++;
         }
         else if( !strcmp( argv[i], "--dst_colour_primaries") && (i < argc) )
         {
-            par->dst_colour_primaries = atoi( argv[i+1] );
+            h->out_pic.colour_primaries = atoi( argv[i+1] );
             i++;
         }
         else if( !strcmp( argv[i], "--src_matrix_coeffs") && (i < argc) )
         {
-            par->src_matrix_coeffs = atoi( argv[i+1] );
+            h->in_pic.matrix_coeffs = atoi( argv[i+1] );
             i++;
         }
         else if( !strcmp( argv[i], "--dst_matrix_coeffs") && (i < argc) )
         {
-            par->dst_matrix_coeffs = atoi( argv[i+1] );
+            h->out_pic.matrix_coeffs = atoi( argv[i+1] );
             i++;
         }
         else if( !strcmp( argv[i], "--src_transfer_characteristics") && (i < argc) )
@@ -187,7 +166,7 @@ int parse_options( t_user_args *par, int argc,  char *argv[] )
             int val_int;
             
             if( sscanf(val, "%d", &val_int) != 0 )
-                par->src_transfer_characteristics = val_int;
+                h->in_pic.transfer_characteristics = val_int;
             {
                 int n = sizeof( transfer_types_table ) / sizeof( transfer_types_table[0]);
                 
@@ -195,7 +174,7 @@ int parse_options( t_user_args *par, int argc,  char *argv[] )
                 for(int idx=0; idx<n; idx++ )
                 {
                     if( !strcasecmp( val, transfer_types_table[i].name ))
-                        par->src_transfer_characteristics = transfer_types_table[i].idx;
+                        h->in_pic.transfer_characteristics = transfer_types_table[i].idx;
                 }
             }
             
@@ -207,7 +186,7 @@ int parse_options( t_user_args *par, int argc,  char *argv[] )
             int val_int;
             
             if( sscanf(val, "%d", &val_int) != 0 )
-                par->dst_transfer_characteristics = val_int;
+                h->out_pic.transfer_characteristics = val_int;
             {
                 int n = sizeof( transfer_types_table ) / sizeof( transfer_types_table[0]);
                 
@@ -215,7 +194,7 @@ int parse_options( t_user_args *par, int argc,  char *argv[] )
                 for(int idx=0; idx<n; idx++ )
                 {
                     if( !strcasecmp( val, transfer_types_table[i].name ))
-                        par->dst_transfer_characteristics = transfer_types_table[i].idx;
+                        h->out_pic.transfer_characteristics = transfer_types_table[i].idx;
                 }
             }
             
@@ -228,12 +207,12 @@ int parse_options( t_user_args *par, int argc,  char *argv[] )
         }
         else if( !strcmp( argv[i], "--dst_video_full_range_flag") && (i < argc) )
         {
-            par->dst_video_full_range_flag = atoi( argv[i+1] );
+            h->out_pic.video_full_range_flag = atoi( argv[i+1] );
             i++;
         }
         else if( !strcmp( argv[i], "--src_video_full_range_flag") && (i < argc) )
         {
-            par->src_video_full_range_flag = atoi( argv[i+1] );
+            h->in_pic.video_full_range_flag = atoi( argv[i+1] );
             i++;
         }
         else if( !strcmp( argv[i], "--cutout_hd") && (i < argc) )
@@ -258,8 +237,62 @@ int parse_options( t_user_args *par, int argc,  char *argv[] )
         //}
         
     }
-    
+ 
+    if( h->out_pic.bit_depth == 0 ){
+        h->out_pic.bit_depth = h->in_pic.bit_depth;
+        if(par->verbose_level>1)
+            printf("output picture bit_depth not specified.  using input picture bit_depth(%d)\n", h->in_pic.bit_depth );
+    }
 
+    if( h->out_pic.width == 0 ){
+        h->out_pic.width = h->in_pic.width;
+        if(par->verbose_level>1)
+            printf("output picture width not specified.  using input picture width(%d)\n", h->in_pic.width );
+    }
+ 
+    if( h->out_pic.height == 0 ){
+        h->out_pic.height = h->in_pic.height;
+        if(par->verbose_level>1)
+            printf("output picture width not specified.  using input picture height(%d)\n", h->in_pic.height );
+    }
+
+    if( h->out_pic.chroma_format_idc == -1 ){
+        h->out_pic.chroma_format_idc = h->in_pic.chroma_format_idc;
+        if(par->verbose_level>1)
+            printf("output picture chroma_format_idc not specified.  using input picture chroma_format_idc(%d)\n", h->in_pic.chroma_format_idc );
+    }
+    
+    
+    if( h->out_pic.chroma_sample_loc_type == -1 ){
+        h->out_pic.chroma_sample_loc_type = h->in_pic.chroma_sample_loc_type;
+        if(par->verbose_level>1)
+            printf("output picture chroma_sample_loc_type not specified.  using input picture chroma_sample_loc_type(%d)\n", h->in_pic.chroma_sample_loc_type );
+    }
+    
+    if( h->out_pic.video_full_range_flag == -1 ){
+        h->out_pic.video_full_range_flag = h->in_pic.video_full_range_flag;
+        if(par->verbose_level>1)
+            printf("output picture video_full_range_flag not specified.  using input picture video_full_range_flag(%d)\n", h->in_pic.video_full_range_flag );
+    }
+    
+    if( h->out_pic.colour_primaries == -1 ){
+        h->out_pic.colour_primaries = h->in_pic.colour_primaries;
+        if(par->verbose_level>1)
+            printf("output picture colour_primaries not specified.  using input picture colour_primaries(%d)\n", h->in_pic.colour_primaries );
+    }
+
+    if( h->out_pic.transfer_characteristics == -1 ){
+        h->out_pic.transfer_characteristics = h->in_pic.transfer_characteristics;
+        if(par->verbose_level>1)
+            printf("output picture transfer_characteristics not specified.  using input picture transfer_characteristics(%d)\n", h->in_pic.transfer_characteristics );
+    }
+
+    if( h->out_pic.matrix_coeffs == -1 ){
+        h->out_pic.matrix_coeffs = h->in_pic.matrix_coeffs;
+        if(par->verbose_level>1)
+            printf("output picture matrix_coeffs not specified.  using input picture matrix_coeffs(%d)\n", h->in_pic.matrix_coeffs );
+    }
+   
     // beginning of sanity checks..
     
  
@@ -299,32 +332,32 @@ int parse_options( t_user_args *par, int argc,  char *argv[] )
     
     //printf(")
     printf("src_filename: %s (type: %s) %s\n",    par->src_filename, input_file_types[ par->input_file_type].name, input_file_types[ par->input_file_type].is_supported?  "(SUPPORTED)" : "(NOT SUPPORTED)"  );
-    printf("src_pic_width: %d\n",       par->src_pic_width );
-    printf("src_pic_height: %d\n",      par->src_pic_height );
-    printf("src_chroma_format_idc: %d\n",   par->src_chroma_format_idc);
-    printf("src_bit_depth: %d\n",       par->src_bit_depth );
-    printf("src_full_range_video_flag: %d\n",   par->src_video_full_range_flag );
-    printf("src_colour_primaries: %d\n",        par->src_colour_primaries );
+    printf("src_pic_width: %d\n",       h->in_pic.width );
+    printf("src_pic_height: %d\n",      h->in_pic.height );
+    printf("src_chroma_format_idc: %d\n",   h->in_pic.chroma_format_idc);
+    printf("src_bit_depth: %d\n",       h->in_pic.bit_depth );
+    printf("src_full_range_video_flag: %d\n",   h->in_pic.video_full_range_flag );
+    printf("src_colour_primaries: %d\n",        h->in_pic.colour_primaries );
 
     printf("src_transfer_characteristics: %d (type: %s) %s\n",
-           par->src_transfer_characteristics,
-           transfer_types_table[ par->src_transfer_characteristics].name, transfer_types_table[ par->src_transfer_characteristics].is_supported?  "(SUPPORTED)" : "(NOT SUPPORTED)"  );
-    printf("src_matrix_coeffs: %d\n",       par->src_matrix_coeffs );
-    printf("src_chroma_sample_loc_type: %d\n",       par->src_chroma_sample_loc_type );
+           h->in_pic.transfer_characteristics,
+           transfer_types_table[ h->in_pic.transfer_characteristics].name, transfer_types_table[ h->in_pic.transfer_characteristics].is_supported?  "(SUPPORTED)" : "(NOT SUPPORTED)"  );
+    printf("src_matrix_coeffs: %d\n",       h->in_pic.matrix_coeffs );
+    printf("src_chroma_sample_loc_type: %d\n",       h->in_pic.chroma_sample_loc_type );
 
     
     printf("dst_filename: %s (type: %s) %s\n",    par->dst_filename, output_file_types[ par->output_file_type].name, output_file_types[ par->output_file_type].is_supported ?  "(SUPPORTED)" :  "(NOT SUPPORTED)"   );
-    printf("dst_pic_width: %d\n",       par->dst_pic_width );
-    printf("dst_pic_height: %d\n",      par->dst_pic_height );
-    printf("dst_chroma_format_idc: %d\n",   par->dst_chroma_format_idc );
-    printf("dst_bit_depth: %d\n",       par->dst_bit_depth );
-    printf("dst_video_full_range_flag: %d\n",   par->dst_video_full_range_flag );
-    printf("dst_colour_primaries: %d\n",        par->dst_colour_primaries );
+    printf("dst_pic_width: %d\n",       h->out_pic.width );
+    printf("dst_pic_height: %d\n",      h->out_pic.height );
+    printf("dst_chroma_format_idc: %d\n",   h->out_pic.chroma_format_idc );
+    printf("dst_bit_depth: %d\n",       h->out_pic.bit_depth );
+    printf("dst_video_full_range_flag: %d\n",   h->out_pic.video_full_range_flag );
+    printf("dst_colour_primaries: %d\n",        h->out_pic.colour_primaries );
     printf("dst_transfer_characteristics: %d (type: %s) %s\n",
-           par->dst_transfer_characteristics,
-           transfer_types_table[ par->dst_transfer_characteristics].name, transfer_types_table[ par->dst_transfer_characteristics].is_supported?  "(SUPPORTED)" : "(NOT SUPPORTED)"  );
-    printf("dst_matrix_coeffs: %d\n",       par->dst_matrix_coeffs );
-    printf("dst_chroma_sample_loc_type: %d\n",       par->dst_chroma_sample_loc_type );
+           h->out_pic.transfer_characteristics,
+           transfer_types_table[ h->out_pic.transfer_characteristics].name, transfer_types_table[ h->out_pic.transfer_characteristics].is_supported?  "(SUPPORTED)" : "(NOT SUPPORTED)"  );
+    printf("dst_matrix_coeffs: %d\n",       h->out_pic.matrix_coeffs );
+    printf("dst_chroma_sample_loc_type: %d\n",       h->out_pic.chroma_sample_loc_type );
 
     
     
@@ -333,48 +366,50 @@ int parse_options( t_user_args *par, int argc,  char *argv[] )
     printf("n_frames: %d\n",        par->n_frames);
     
     
-    if( par->src_pic_width < 2 || par->src_pic_width > 10000 ){
-        printf("WARNING: pic_width(%d) outside range [0,10000]\n", par->src_pic_width );
+    if( h->in_pic.width < 2 || h->in_pic.width > 10000 ){
+        printf("WARNING: pic_width(%d) outside range [0,10000]\n", h->in_pic.width );
         arg_errors++;
     }
     
-    if( par->src_pic_height < 2 || par->src_pic_height > 10000 ){
-        printf("WARNING: pic_height(%d) outside range [0,10000]\n", par->src_pic_height );
+    if( h->in_pic.height < 2 || h->in_pic.height > 10000 ){
+        printf("WARNING: pic_height(%d) outside range [0,10000]\n", h->in_pic.height );
         arg_errors++;
     }
     
-    if( par->src_bit_depth < 8 || par->src_bit_depth > 16 ){
-        printf("WARNING: bit_depth(%d) outside range [8,16]\n", par->src_bit_depth );
+    if( h->in_pic.bit_depth < 8 || h->in_pic.bit_depth > 16 ){
+        printf("WARNING: bit_depth(%d) outside range [8,16]\n", h->in_pic.bit_depth );
         arg_errors++;
     }
     
-    if( par->src_chroma_format_idc != CHROMA_444 ){
+    if( h->in_pic.chroma_format_idc != CHROMA_444 ){
         printf("WARNING: chroma_format_idc(%d) not %d, Only 4:4:4 input supported at this moment..\n",
-               CHROMA_444, par->src_chroma_format_idc );
+               CHROMA_444, h->in_pic.chroma_format_idc );
         arg_errors++;
     }
     
 
-    if( par->dst_pic_width < 2 || par->dst_pic_width > 10000 ){
-        printf("WARNING: pic_width(%d) outside range [0,10000]\n", par->dst_pic_width );
+    if( h->out_pic.width < 2 || h->out_pic.width > 10000 ){
+        printf("WARNING: pic_width(%d) outside range [0,10000]\n", h->out_pic.width );
         arg_errors++;
     }
     
-    if( par->dst_pic_height < 2 || par->dst_pic_height > 10000 ){
-        printf("WARNING: pic_height(%d) outside range [0,10000]\n", par->dst_pic_height );
+    if( h->out_pic.height < 2 || h->out_pic.height > 10000 ){
+        printf("WARNING: pic_height(%d) outside range [0,10000]\n", h->out_pic.height );
         arg_errors++;
     }
     
-    if( par->dst_bit_depth < 8 || par->dst_bit_depth > 16 ){
-        printf("WARNING: bit_depth(%d) outside range [8,16]\n", par->dst_bit_depth );
+    if( h->out_pic.bit_depth < 8 || h->out_pic.bit_depth > 16 ){
+        printf("WARNING: bit_depth(%d) outside range [8,16]\n", h->out_pic.bit_depth );
         arg_errors++;
     }
     
-    if( par->dst_chroma_format_idc != 1 ){
+#if 0
+    if( h->out_pic.chroma_format_idc != CHROMA_420 &&  h->out_pic.chroma_format_idc !=  ){
         printf("WARNING: chroma_format_idc(%d) outside range [1,1]. Only 4:2:0 output supported at this moment..\n",
-               par->dst_chroma_format_idc );
+               h->out_pic.chroma_format_idc );
         arg_errors++;
     }
+#endif
     
     if( arg_errors )
     {
@@ -390,7 +425,7 @@ int parse_options( t_user_args *par, int argc,  char *argv[] )
 }
 
 // TODO: add all the t_pic attributes to the command line input
-void copy_pic_vars( t_pic *dst, t_pic *src )
+void copy_pic_vars( pic_t *dst, pic_t *src )
 {
     dst->width = src->width;
     dst->height = src->height;
@@ -402,7 +437,142 @@ void copy_pic_vars( t_pic *dst, t_pic *src )
     dst->pic_buffer_type = src->pic_buffer_type;
     
 }
-int init_pic( t_pic *pic, int width, int height, int chroma_format_idc, int bit_depth, int sample_type, int half_float_flag, int verbose_level, const char *name )
+
+void pic_stats( pic_t *pic, pic_stats_t *stats, int print_stats )
+{
+
+   
+    for( int cc = 0; cc< pic->n_components; cc++ )
+    {
+        float sum = 0.0;
+        
+        if( pic->pic_buffer_type == PIC_TYPE_U16 )
+        {
+            stats->i_min[cc] = std::numeric_limits<unsigned short>::max( );
+            stats->i_max[cc] = std::numeric_limits<unsigned short>::min( );
+            int size = pic->width * pic->height;
+            
+            for( int i = 0; i < size; i++ )
+            {
+                unsigned short s = pic->buf[cc][ i];
+                
+                sum += (float) s;
+                
+                stats->i_min[cc] = s < stats->i_min[cc] ? s: stats->i_min[cc];
+                stats->i_max[cc] = s > stats->i_max[cc] ? s: stats->i_max[cc];
+            }
+ 
+            float avg = sum / (float) size;
+ 
+            
+            
+            int D = (1<<( pic->bit_depth - 8 ));
+            int SMin = D*16;
+            int YMax = 219*D + SMin;
+            int CMax = 224*D + SMin;
+            
+            stats->estimated_floor[cc] = stats->i_min[cc];
+            stats->estimated_ceiling[cc] = stats->i_max[cc];
+            
+            if( stats->estimated_ceiling[cc] < YMax &&  stats->estimated_ceiling[cc] > ((YMax*3)/4) )
+                stats->estimated_ceiling[cc] = YMax;
+ 
+            if( stats->estimated_ceiling[cc] < CMax &&  stats->estimated_ceiling[cc] > ((CMax*3)/4) )
+                stats->estimated_ceiling[cc] = CMax;
+            
+            stats->i_avg[cc] = (int) avg;
+            
+       //     if( print_stats )
+            {
+                printf("pic_stats(%s)[c=%d]: min(%d) max(%d) avg(%f)\n",
+                       pic->name, cc, stats->i_min[cc], stats->i_max[cc], avg );
+            }
+        }
+        else if( pic->pic_buffer_type == PIC_TYPE_FLOAT)
+        {
+            stats->f_min[cc] = std::numeric_limits<float>::max( );
+            stats->f_max[cc] = std::numeric_limits<float>::min( );
+            
+            int size = pic->width * pic->height;
+            
+            for( int i = 0; i < size; i++ )
+            {
+                float s = pic->fbuf[cc][ i];
+                
+                sum += s;
+                
+                stats->f_min[cc] = s < stats->f_min[cc] ? s: stats->f_min[cc];
+                stats->f_max[cc] = s > stats->f_max[cc] ? s: stats->f_max[cc];
+            }
+            
+            float avg = sum / (float) size;
+           
+            stats->estimated_floor[cc] = (int) stats->f_min[cc];
+            stats->estimated_ceiling[cc] = (int) stats->f_max[cc];
+            
+            stats->f_avg[cc] = avg;
+            
+            // have to ratchet for floating point
+#if 0
+            // more sophisticated statistics
+            for(int i=MIN_BIT_DEPTH;i<MAX_BIT_DEPTH;i++ )
+            {
+                int D = (1<<( i - 8 )) * 16;
+                
+                if( stats->i_min[cc] == D )
+                    stats->estimated_floor[cc] = D;
+                {
+                    
+                }
+            }
+#endif
+            
+            if( print_stats )
+            {
+                
+                printf("pic_stats(%s)[c=%d]: min(%f) max(%f) avg(%f)",
+                       pic->name, cc, stats->f_min[cc], stats->f_max[cc], avg );
+            }
+        
+        
+        }
+    }
+    
+    stats->init = 1;
+    
+}
+
+
+void set_pic_clip( pic_t *pic )
+{
+    clip_limits_t *clip = &(pic->clip);
+    
+    clip->minCV = 0; //12 bits
+    clip->maxCV = (1<< pic->bit_depth)-1;
+    clip->Half = 1<<(pic->bit_depth -1);
+    
+    // Set up for video range if needed
+    if( pic->video_full_range_flag == 0 ) {
+        printf("Processing (%s) for Video Range\n", pic->name );
+        unsigned short D = 1<<(pic->bit_depth - 8);
+        clip->minVR = 16*D;
+        clip->maxVR = 219*D+clip->minVR;
+        clip->minVRC = clip->minVR;
+        clip->maxVRC = 224*D+clip->minVRC;
+        //achromatic point for chroma will be "Half"(e.g. 512 for 10 bits, 2048 for 12 bits etc..)
+    } else {
+        printf("Processing (%s) for full range\n", pic->name );
+        clip->minVR = 0;
+        clip->maxVR = clip->maxCV;
+        clip->minVRC = 0;
+        clip->maxVRC = clip->maxCV;
+    }
+    
+    
+    
+}
+
+int init_pic( pic_t *pic, int width, int height, int chroma_format_idc, int bit_depth, int video_full_range_flag, int colour_primaries, int transfer_characteristics, int matrix_coeffs, int chroma_sample_loc_type, int sample_type, int half_float_flag, int verbose_level, const char *name )
 {
     pic->width = width;
     pic->height = height;
@@ -410,8 +580,30 @@ int init_pic( t_pic *pic, int width, int height, int chroma_format_idc, int bit_
     pic->chroma_format_idc = chroma_format_idc;
     pic->bit_depth = bit_depth;
     pic->name = name;
+    
+    pic->video_full_range_flag = video_full_range_flag;
+    pic->matrix_coeffs = matrix_coeffs;
+    pic->transfer_characteristics = transfer_characteristics;
+    pic->colour_primaries = colour_primaries;
+    pic->chroma_sample_loc_type = chroma_sample_loc_type;
+    
+    pic->n_components = 3;
+    
+    memset( &(pic->stats), 0, sizeof( pic_stats_t) );
 
-#if 0 
+    pic->plane[0].width = pic->width;
+    pic->plane[0].height = pic->height;
+    
+    int chroma_width_scale = pic->chroma_format_idc == CHROMA_444 ? 0 : 1;
+    int chroma_height_scale = pic->chroma_format_idc == CHROMA_420 ? 1 : 0;
+    
+    pic->plane[1].width = pic->plane[2].width = pic->plane[0].width >> chroma_width_scale;
+    pic->plane[1].height = pic->plane[2].height = pic->plane[0].height >> chroma_height_scale;
+    
+    set_pic_clip( pic );
+
+    
+#if 0
     if( verbose_level > 2 )
     {
         printf("init_pic(%s): width(%d) height(%d) buf_type(%d) chroma_format(%d) bit_depth(%d)\n", pic->name, pic->width, pic->height, pic->pic_buffer_type, pic->chroma_format_idc, pic->bit_depth );
@@ -461,7 +653,7 @@ int init_pic( t_pic *pic, int width, int height, int chroma_format_idc, int bit_
     return(0);
 }
 
-int deinit_pic( t_pic *pic )
+int deinit_pic( pic_t *pic )
 {
     int errors= 0;
     
@@ -508,9 +700,8 @@ int deinit_pic( t_pic *pic )
     
 }
 
-  
 // TODO: fseek
-void read_planar_integer_file( t_pic *dst, char *filename, int file_type, int start_frame )
+void read_planar_integer_file( pic_t *dst, char *filename, int file_type, int start_frame )
 {
     int error_cnt = 0;
     
@@ -562,64 +753,76 @@ void read_planar_integer_file( t_pic *dst, char *filename, int file_type, int st
 
 int main (int argc, char *argv[])
 {
-    t_hdr h;
-    t_user_args *ua = &(h.user_args);
+    hdr_t h;
+    user_args_t *ua = &(h.user_args);
  //   char fn[256];
+
+    // clear all variables in the primary pictures
+    memset( &(h.in_pic), 0, sizeof( pic_t) );
+    memset( &(h.out_pic), 0, sizeof( pic_t) );
     
-    parse_options( ua,  argc, argv );
+    parse_options( &h,  argc, argv );
     
-    h.minCV = 0; //12 bits
-    h.maxCV = 65535;
-    h.Half = 32768; // e.g half value 12 bits would have been 2048
- 
-    h.in_pic.init = 0;
-    h.out_pic.init = 0;
+
+  //  h.maxCV = 65535;
+  //  h.Half = 32768; // e.g half value 12 bits would have been 2048
     
     
-    // Set up for video range if needed
-    if( ua->dst_video_full_range_flag == 0) {
-        printf("Processing for Video Range\n");
-        unsigned short D = 64;
-        h.minVR = 64*D;
-        h.maxVR = 876*D+h.minVR;
-        h.minVRC = h.minVR;
-        h.maxVRC = 896*D+h.minVRC;
-        //achromatic point for chroma will be "Half"(e.g. 512 for 10 bits, 2048 for 12 bits etc..)
-        
-    }
     
     try
     {
-        t_pic exr_pic;
-        t_pic tif_pic;
+        pic_t matrix_converted_picture;
+        pic_t *tmp_pic = &matrix_converted_picture;
         
-        exr_pic.init = 0;
-        tif_pic.init = 0;
-        
-        int pic_width, pic_height;
+        pic_t *in_pic = &(h.in_pic);
+        pic_t *out_pic = &(h.out_pic);
 
-        exr_pic.pic_buffer_type = PIC_TYPE_FLOAT;
-        tif_pic.pic_buffer_type = PIC_TYPE_U16;
+
+        tmp_pic->matrix_coeffs = out_pic->matrix_coeffs;
+        tmp_pic->transfer_characteristics = out_pic->transfer_characteristics;
+        tmp_pic->colour_primaries = out_pic->colour_primaries;
+        tmp_pic->chroma_sample_loc_type = out_pic->chroma_sample_loc_type;
+
         
        // exr_test((char *)"Market3_1920x1080p_50_hf_709_00000.exr");
         //       exr_test( &exr_pic, (char *)"Seine_1920x1080p_25_hf_709_00000_rrtd_tmp.exr" );
         if( ua->input_file_type == INPUT_FILE_TYPE_RGB )
         {
-            t_pic raw_pic;
-            raw_pic.init = 0;
+
+            if( in_pic->matrix_coeffs != MATRIX_GBR )
+                printf("reading .rgb file (%s):  setting input picture matrix_coef=%d (MATRIX_GBR)", ua->src_filename, MATRIX_GBR  );
+
+            if( in_pic->chroma_format_idc != CHROMA_444 )
+                printf("reading .rgb file (%s):  setting input picture chroma_format_idc=%d (CHROMA_444)", ua->src_filename, CHROMA_444  );
+            
+            in_pic->matrix_coeffs = MATRIX_GBR;
+            in_pic->chroma_format_idc = CHROMA_444;
+            
+            init_pic( in_pic, in_pic->width, in_pic->height, in_pic->chroma_format_idc, in_pic->bit_depth, in_pic->video_full_range_flag,
+                     in_pic->colour_primaries, in_pic->transfer_characteristics, in_pic->matrix_coeffs, in_pic->chroma_sample_loc_type,
+                     PIC_TYPE_U16, 0, ua->verbose_level, "in_pic" );
 
             
-            init_pic( &raw_pic, ua->src_pic_width, ua->src_pic_height, ua->src_chroma_format_idc, ua->src_bit_depth, PIC_TYPE_U16, 0, ua->verbose_level, "raw_pic from rgb" );
-
             // TODO: derive attributes (size, chroma_format, bitdepth from filename )
-            read_planar_integer_file( &raw_pic, ua->src_filename, ua->input_file_type, 0);
+            // add .yuv next
+            read_planar_integer_file( in_pic, ua->src_filename, INPUT_FILE_TYPE_RGB, 0 );
+        
+            // TODO: check that range indicated by full_range_flag is being observed
+            
+            pic_stats( in_pic, &(in_pic->stats), 1 );
+            
 
-            init_pic( &(h.in_pic), raw_pic.width, raw_pic.height, raw_pic.chroma_format_idc, raw_pic.bit_depth, raw_pic.pic_buffer_type, 0, ua->verbose_level, "RGB in_pic" );
+            init_pic( tmp_pic, in_pic->width, in_pic->height, in_pic->chroma_format_idc, in_pic->bit_depth, in_pic->video_full_range_flag,
+                     out_pic->colour_primaries, out_pic->transfer_characteristics, out_pic->matrix_coeffs, in_pic->chroma_sample_loc_type,
+                     PIC_TYPE_U16, 0, ua->verbose_level, ".rgb --> mati" );
             
-            matrix_convert(  &(h.in_pic), &h, &raw_pic );
+         
+            matrix_convert(  tmp_pic, &h, in_pic );
             
-            pic_width = raw_pic.width;
-            pic_height = raw_pic.height;
+            pic_stats( tmp_pic, &(h.in_pic.stats), 1 );
+            
+  //          pic_width = raw_pic.width;
+    //        pic_height = raw_pic.height;
             
         }
         else if( ua->input_file_type == INPUT_FILE_TYPE_DPX )
@@ -629,7 +832,13 @@ int main (int argc, char *argv[])
             short cineon = 0;
             short half_flag = 0;
 
-
+            if( in_pic->matrix_coeffs != MATRIX_GBR )
+                printf("reading .exr file (%s):  setting input picture matrix_coef=%d (MATRIX_GBR)", ua->src_filename, MATRIX_GBR  );
+            
+            if( in_pic->chroma_format_idc != CHROMA_444 )
+                printf("reading .exr file (%s):  setting input picture chroma_format_idc=%d (CHROMA_444)", ua->src_filename, CHROMA_444  );
+ 
+            // dpx_read() initlaizes tmp_dpx_pic
             dpx_read ( ua->src_filename, &tmp_dpx_pic, &dpx_width, &dpx_height, cineon, half_flag);
             
 #if 0
@@ -641,134 +850,180 @@ int main (int argc, char *argv[])
             dst_pic->matrix_coeffs = MATRIX_GBR;
 #endif
             
-            pic_width = dpx_width;
-            pic_height = dpx_height;
+      //      pic_width = dpx_width;
+        //    pic_height = dpx_height;
 
-            printf("read dpx file: width(%d) height(%d)\n", pic_width, pic_height );
-            init_pic( &exr_pic, pic_width, pic_height, CHROMA_444, 32, PIC_TYPE_FLOAT, half_flag, ua->verbose_level, "exr_pic from dpx" );
+    //        printf("read dpx file: width(%d) height(%d)\n", pic_width, pic_height );
+            
+            in_pic->matrix_coeffs = MATRIX_GBR;
+            in_pic->chroma_format_idc = CHROMA_444;
 
-    
-            muxed_dpx_to_planar_float_buf( &exr_pic, pic_width, pic_height, tmp_dpx_pic );
+            init_pic( in_pic, dpx_width, dpx_height, CHROMA_444, 32,  in_pic->video_full_range_flag,
+                     in_pic->colour_primaries, in_pic->transfer_characteristics, in_pic->matrix_coeffs, in_pic->chroma_sample_loc_type,
+                     PIC_TYPE_FLOAT, half_flag, ua->verbose_level, "in_pic from dpx"  );
+
+            
+            muxed_dpx_to_planar_float_buf( in_pic, dpx_width, dpx_height, tmp_dpx_pic );
+            free( tmp_dpx_pic );
 
             if( ua->verbose_level > 0 )
                 printf("muxed_dpx_to_planar_float_buf\n");
 
-            init_pic( &(h.in_pic), exr_pic.width, exr_pic.height, CHROMA_444, 32, PIC_TYPE_FLOAT, half_flag, ua->verbose_level, "in_pic from dpx" );
-       
+            init_pic( tmp_pic, dpx_width, dpx_height, CHROMA_444, 32,  in_pic->video_full_range_flag,
+                     in_pic->colour_primaries, in_pic->transfer_characteristics, in_pic->matrix_coeffs, in_pic->chroma_sample_loc_type,
+                     PIC_TYPE_FLOAT, half_flag, ua->verbose_level, "tmp_pic from dpx"  );
+
        //     if( ua->output_file_type != OUTPUT_FILE_TYPE_EXR )
             {
                 if( ua->verbose_level > 0 )
                     printf("matrix_convert of DPX input\n");
                 
-                matrix_convert( &(h.in_pic), &h, &exr_pic );
+                matrix_convert( tmp_pic, &h, in_pic );
             }
             
-           free( tmp_dpx_pic );
            
        }
        else if( ua->input_file_type == INPUT_FILE_TYPE_EXR )
        {
            int half_flag = 0;  // internal processing always 32-bits
-           
-            read_exr( &exr_pic, ua->src_filename );
-
-           pic_width = exr_pic.width;
-           pic_height = exr_pic.height;
-           
-            init_pic( &(h.in_pic), exr_pic.width, exr_pic.height, CHROMA_444, 32, PIC_TYPE_FLOAT, half_flag, ua->verbose_level, "in_pic" );
-           
        
-           matrix_convert( &(h.in_pic), &h, &exr_pic );
+           // read_exr() initlaizes in_pic
+           
+            read_exr( in_pic, ua->src_filename );
+
+      //     pic_width = exr_pic.width;
+        //   pic_height = exr_pic.height;
+           
+           init_pic( tmp_pic, in_pic->width, in_pic->height, CHROMA_444, 32,  in_pic->video_full_range_flag,
+                    in_pic->colour_primaries, in_pic->transfer_characteristics, in_pic->matrix_coeffs, in_pic->chroma_sample_loc_type,
+                    PIC_TYPE_FLOAT, half_flag, ua->verbose_level, "in_pic from exr"  );
+
+           matrix_convert( tmp_pic, &h, in_pic );
  
         } else if( ua->input_file_type == INPUT_FILE_TYPE_TIFF ){
-            read_tiff( &tif_pic, &h, ua->src_filename );
-            
-            pic_width = tif_pic.width;
-            pic_height = tif_pic.height;
 
-            init_pic( &(h.in_pic), tif_pic.width, tif_pic.height,  CHROMA_444, 16, PIC_TYPE_U16, 0, ua->verbose_level, "in_pic" );
-            matrix_convert( &(h.in_pic), &h, &tif_pic );
+            // read_tiff() initlaizes in_pic
+            
+            read_tiff( in_pic, ua->src_filename, &h );
+            
+  
+            //init_pic( tmp_pic, in_pic->width, in_pic->height,  CHROMA_444, 16, PIC_TYPE_U16, 0, ua->verbose_level, "in_pic" );
+            
+            
+            init_pic( tmp_pic, in_pic->width, in_pic->height, CHROMA_444, 32,  in_pic->video_full_range_flag,
+                     in_pic->colour_primaries, in_pic->transfer_characteristics, in_pic->matrix_coeffs, in_pic->chroma_sample_loc_type,
+                     PIC_TYPE_FLOAT, 0, ua->verbose_level, "in_pic from tiff"  );
+
+            
+            matrix_convert( tmp_pic, &h,  in_pic );
         }
+ 
         
         if( ua->dst_filename != NULL ){
             
-            int dst_pic_buf_type, dst_chroma_format_idc;
-   
+            int dst_pic_buf_type;
+            
             if( ua->output_file_type == OUTPUT_FILE_TYPE_DPX || ua->output_file_type == OUTPUT_FILE_TYPE_EXR )
             {
                 dst_pic_buf_type = PIC_TYPE_FLOAT;
-                dst_chroma_format_idc = CHROMA_444;
+                
+                if( out_pic->chroma_format_idc != CHROMA_444 )
+                {
+                    printf("WARNING: out is RGB pic: chroma_format_idc(%d) != CHROMA_444 (%d)", out_pic->chroma_format_idc, CHROMA_444 );
+                    out_pic->chroma_format_idc = CHROMA_444;
+                }
+                if( out_pic->matrix_coeffs != MATRIX_GBR )
+                {
+                    printf("WARNING: out is RGB pic: matrix_coeffs(%d) != MATRIX_GBR (%d)", out_pic->matrix_coeffs, MATRIX_GBR );
+                    out_pic->matrix_coeffs = MATRIX_GBR;
+                }
             }
-            else
-            {
+            else {
                 dst_pic_buf_type = PIC_TYPE_U16;
-                dst_chroma_format_idc = CHROMA_420;
             }
             
-            init_pic( &(h.out_pic), pic_width, pic_height, dst_chroma_format_idc, ua->dst_bit_depth, dst_pic_buf_type, 0, ua->verbose_level, "out_pic" );
+            // dimensions already established in parse_options()
+     //       init_pic( &(h.out_pic), h.out_pic.width, h.out_pic.height, h.out_pic.chroma_format_idc, h.out_pic.bit_depth, dst_pic_buf_type, 0, ua->verbose_level, "out_pic" );
+            
+            // TODO: make this command line variable
+            int out_half_flag = 0;
+            
+            init_pic( out_pic, out_pic->width, out_pic->height, out_pic->chroma_format_idc, out_pic->bit_depth,  out_pic->video_full_range_flag,
+                     out_pic->colour_primaries, out_pic->transfer_characteristics, out_pic->matrix_coeffs, out_pic->chroma_sample_loc_type,
+                     dst_pic_buf_type, out_half_flag, ua->verbose_level, "out_pic"  );
+
         
             int should_convert = 0;
             
-            if( h.out_pic.chroma_format_idc !=  h.in_pic.chroma_format_idc )
+            if( out_pic->chroma_format_idc != in_pic->chroma_format_idc )
             {
-                printf("convert() because chroma format dst(%d) != src(%d)\n", h.out_pic.chroma_format_idc, h.in_pic.chroma_format_idc);
+                printf("convert() because chroma format dst(%d) != src(%d)\n", out_pic->chroma_format_idc, in_pic->chroma_format_idc);
                 should_convert++;
             }
             
-            if( h.out_pic.width !=  h.in_pic.width )
+            if( out_pic->width != in_pic->width )
             {
-                printf("convert() because width dst(%d) != src(%d)\n",  h.out_pic.width ,  h.in_pic.width );
+                printf("convert() because width dst(%d) != src(%d)\n",  out_pic->width ,  in_pic->width );
                 should_convert++;
             }
             
-            if( h.out_pic.height !=  h.in_pic.height )
+            if( out_pic->height != in_pic->height )
             {
-                printf("convert() because height dst(%d) != src(%d)\n",  h.out_pic.height , h.in_pic.height );
+                printf("convert() because height dst(%d) != src(%d)\n",  out_pic->height , in_pic->height );
                 should_convert++;
             }
  
             printf("converting: %d\n", should_convert );
 
-            if( should_convert != 0 )
-                convert( &(h.out_pic), &h, &(h.in_pic) );
-            else if( h.out_pic.pic_buffer_type == PIC_TYPE_FLOAT && h.in_pic.pic_buffer_type == PIC_TYPE_FLOAT
-                    && h.out_pic.chroma_format_idc  == CHROMA_444 &&  h.in_pic.chroma_format_idc  == CHROMA_444)
+            if( should_convert != 0 ){
+                
+#ifdef OPENCV_ENABLED
+                openCV_resize_picture(  &(h.out_pic), tmp_pic );
+#else
+                convert( &(h.out_pic), &h, tmp_pic );
+#endif
+            }
+            else if( tmp_pic->pic_buffer_type == PIC_TYPE_FLOAT && out_pic->pic_buffer_type == PIC_TYPE_FLOAT
+                    && tmp_pic->chroma_format_idc  == CHROMA_444 &&  tmp_pic->chroma_format_idc  == CHROMA_444)
             {
        //         dst_type = PIC_TYPE_FLOAT;
          //       dst_chroma = CHROMA_444;
         
-                int size = pic_width * pic_height * sizeof(  float );
+                int size = h.out_pic.width * h.out_pic.height * sizeof(  float );
 
                 printf("copying in-->out pic float-buf\n" );
                 
-                memcpy(  h.out_pic.fbuf[0], h.in_pic.fbuf[0], size );
-                memcpy(  h.out_pic.fbuf[1], h.in_pic.fbuf[1], size );
-                memcpy(  h.out_pic.fbuf[2], h.in_pic.fbuf[2], size );
+                memcpy(  out_pic->fbuf[0], tmp_pic->fbuf[0], size );
+                memcpy(  out_pic->fbuf[1], tmp_pic->fbuf[1], size );
+                memcpy(  out_pic->fbuf[2], tmp_pic->fbuf[2], size );
             }
-            else if(  h.out_pic.chroma_format_idc  == CHROMA_444 &&  h.in_pic.chroma_format_idc  == CHROMA_444 )
+            else if(  out_pic->chroma_format_idc  == CHROMA_444 &&  tmp_pic->chroma_format_idc  == CHROMA_444 )
             {
-                int size = pic_width * pic_height * sizeof( unsigned short);
-                
+                int size = out_pic->width * out_pic->height * sizeof(  unsigned short );
+           
                 printf("copying in-->out pic u16-buf\n" );
                 
-                memcpy(  h.out_pic.buf[0], h.in_pic.buf[0], size );
-                memcpy(  h.out_pic.buf[1], h.in_pic.buf[1], size );
-                memcpy(  h.out_pic.buf[2], h.in_pic.buf[2], size );
+                memcpy(  out_pic->buf[0], tmp_pic->buf[0], size );
+                memcpy(  out_pic->buf[1], tmp_pic->buf[1], size );
+                memcpy(  out_pic->buf[2], tmp_pic->buf[2], size );
     
             }
             
+            pic_stats( out_pic, &(out_pic->stats), 1 );
+
             
             if( ua->output_file_type == OUTPUT_FILE_TYPE_YUV && h.out_pic.pic_buffer_type == PIC_TYPE_U16 )
-                write_yuv( ua->dst_filename, &h,  &(h.out_pic) );
-            else if( ua->output_file_type == OUTPUT_FILE_TYPE_DPX && h.out_pic.pic_buffer_type == PIC_TYPE_FLOAT )
+                write_yuv( ua->dst_filename, &h,  out_pic );
+            else if( ua->output_file_type == OUTPUT_FILE_TYPE_DPX && out_pic->pic_buffer_type == PIC_TYPE_FLOAT )
             {
-                float *tmp_dpx_pic = (float *) malloc( 3 * exr_pic.width * exr_pic.height * sizeof( float ) );
+                // TODO: convert integer to float if picture buffer type is U16
+                float *tmp_dpx_pic = (float *) malloc( 3 * out_pic->width * out_pic->height * sizeof( float ) );
 
 
-                planar_float_to_muxed_dpx_buf( tmp_dpx_pic, exr_pic.width, exr_pic.height, &(h.in_pic) );
+                planar_float_to_muxed_dpx_buf( tmp_dpx_pic, out_pic->width, out_pic->height, out_pic );
         
                 //#if 0
-                dpx_write_float( ua->dst_filename, tmp_dpx_pic, exr_pic.width,  exr_pic.height);
+                dpx_write_float( ua->dst_filename, tmp_dpx_pic, out_pic->width,  out_pic->height);
                 free( tmp_dpx_pic );
             }
             else if ( ua->output_file_type == OUTPUT_FILE_TYPE_EXR && h.out_pic.pic_buffer_type == PIC_TYPE_FLOAT )
@@ -780,10 +1035,10 @@ int main (int argc, char *argv[])
                     
                     write_exr_file(
                                    ua->dst_filename,
-                                   exr_pic.width,
-                                   exr_pic.height,
+                                   out_pic->width,
+                                   out_pic->height,
                                    half_float_flag,
-                                   &exr_pic );
+                                   out_pic );
 
                 }
             }

@@ -70,28 +70,6 @@ static struct type_info_t output_file_types[] =
 
 
 
-#if 0
-struct option
-{
-    const char *name;
-    int has_arg;
-    int *flag;
-    int val;
-};
-
-#define     no_arg          1
-#define     required_arg    2
-#define     optional_arg    3
-
-
-static struct option long_options[] =
-{
-    {"help", 0, "", 'h' },
-};
-
-
-};
-#endif
 
 const chroma_format_t chroma_format_list[] = {
     { "mono",    1, 1, 1 },
@@ -284,45 +262,6 @@ const matrix_info_t matrix_coefficients_table_E5[12] = {
     
 };
 
-typedef struct
-{
-    int width;
-    int height;
-    int bit_depth;
-    unsigned short *buf;
-    
-} t_component;
-
-#define MAX_NUM_CC  3
-
-typedef struct
-{
-    int chroma_format_idc;
-    int transfer_characteristics;
-    int colour_primaries;
-    int matrix_coeffs;
-    int chroma_sample_loc_type;
-    
-    int bit_depth;
-    int video_full_range_flag;
-    
-    //int bit_depth_Y;
-    //int bit_depth_C;
-    int pic_width;
-    int pic_height;
-    
-    
-} t_vui;
-
-
-
-typedef struct
-{
-    t_vui vui;
-    int n_components;
-    t_component cc[MAX_NUM_CC];
-    
-} t_yuv_frame;
 
 typedef struct
 {
@@ -331,34 +270,6 @@ typedef struct
     int verbose_level;
     int src_start_frame;
     int n_frames;
-    
-    t_vui src_vui;
-    t_vui dst_vui;
-    
-    int src_pic_width;
-    int src_pic_height;
-    int dst_pic_width;
-    int dst_pic_height;
-    
-    int src_bit_depth;
-    int dst_bit_depth;
-    
-    int src_chroma_format_idc;
-    int dst_chroma_format_idc;
-    
-    int src_colour_primaries;
-    int dst_colour_primaries;
-    int src_transfer_characteristics;
-    int dst_transfer_characteristics;
-    int src_matrix_coeffs;
-    int dst_matrix_coeffs;
-    
-;  // 0: 16,235   1:  0,255
-    int dst_video_full_range_flag;
-    int src_video_full_range_flag;
-    
-    int src_chroma_sample_loc_type;
-    int dst_chroma_sample_loc_type;
     
     int chroma_resampler_type;    // BOX, FIR
     
@@ -373,38 +284,79 @@ typedef struct
     int input_file_type;
     int output_file_type;
     
-} t_user_args;
+} user_args_t;
 
-#if 0
-typedef struct
-{
-    t_yuv_frame src;
-    t_yuv_frame dst;
-    t_user_args args;
-} t_hdr;
-#endif
 
-typedef struct {
-    unsigned long long Y;
-    unsigned long long Cb;
-    unsigned long long Cr;
-    
-} t_mse;
-
-typedef struct
-{
-    double Y;
-    double Cb;
-    double Cr;
-} t_psnr;
-
+#define MIN_BIT_DEPTH   10
+#define MAX_BIT_DEPTH   16
 
 #define PIC_TYPE_U16    1
 #define PIC_TYPE_FLOAT  2
 
+#define MAX_CC  3       // maximum component channels (color sample planes)
+
 typedef struct
 {
     int init;
+    
+    float f_max[MAX_CC];
+    float f_min[MAX_CC];
+    float f_avg[MAX_CC];
+    
+    unsigned short i_max[MAX_CC];
+    unsigned short i_min[MAX_CC];
+    unsigned short i_avg[MAX_CC];
+    
+    
+    int estimated_ceiling[MAX_CC];
+    int estimated_floor[MAX_CC];
+    
+} pic_stats_t;
+
+typedef struct
+{
+    int init;
+    
+    float f_max;
+    float f_min;
+    float f_avg;
+    float f_var;
+    
+    unsigned short i_max;
+    unsigned short i_min;
+    unsigned short i_avg;
+    unsigned short i_var;
+    
+    int estimated_ceiling;
+    int estimated_floor;
+    
+} plane_stats_t;
+
+typedef struct
+{
+    int width;
+    int height;
+} pic_plane_t;
+
+typedef struct
+{
+    unsigned long minCV; //12 bits
+    unsigned long maxCV;
+    // unsigned short D; //D=4 for 12 bits =1 10bits = 16 for 14 bits
+    unsigned short minVR;
+    unsigned short maxVR;
+    unsigned short minVRC;
+    unsigned short maxVRC;
+    unsigned short Half;
+
+} clip_limits_t;
+
+
+typedef struct
+{
+    int init;
+    
+    int n_components;
     
     int width;
     int height;
@@ -420,43 +372,53 @@ typedef struct
 
     int pic_buffer_type;
     int half_float_flag;
-    unsigned short *buf[3];
-    float *fbuf[3];
+    
+    clip_limits_t clip;
+
+    unsigned short *buf[MAX_CC];
+    float *fbuf[MAX_CC];
     
     const char *name;
- 
-} t_pic;
+    
+    pic_stats_t stats;
+
+    pic_plane_t plane[MAX_CC];
+
+
+} pic_t;
 
 
 typedef struct
 {
-  //  unsigned long Half; // e.g half value 12 bits would have been 2048
+#if 0
+    //  unsigned long Half; // e.g half value 12 bits would have been 2048
     unsigned long minCV; //12 bits
     unsigned long maxCV;
    // unsigned short D; //D=4 for 12 bits =1 10bits = 16 for 14 bits
     unsigned short minVR, maxVR, minVRC,maxVRC,Half;
+#endif
     
-    t_user_args user_args;
+    user_args_t user_args;
     
-    t_pic in_pic;
-    t_pic out_pic;
+    pic_t in_pic;
+    pic_t out_pic;
     
-} t_hdr;
+} hdr_t;
 
 
 //void exr_test( char *fn );
 
 // exr.cpp
-void read_exr( t_pic *dst_pic, char *filename );
-int write_exr_file( char *filename, int pic_width, int pic_height, int half_float_flag, t_pic *src_pic );
+void read_exr( pic_t *dst_pic, char *filename );
+int write_exr_file( char *filename, int pic_width, int pic_height, int half_float_flag, pic_t *src_pic );
 
 // convert.cpp
-int convert( t_pic *out_pic, t_hdr *h, t_pic *in_pic );
-int write_yuv(  char *filename, t_hdr *h, t_pic *in_pic );
-int matrix_convert( t_pic *out_pic, t_hdr *h, t_pic *in_pic );
+int convert( pic_t *out_pic, hdr_t *h, pic_t *in_pic );
+int write_yuv(  char *filename, hdr_t *h, pic_t *in_pic );
+int matrix_convert( pic_t *out_pic, hdr_t *h, pic_t *in_pic );
 
 // tiff.cpp
-int read_tiff( t_pic *tif_pic, t_hdr *h, char* filename );
+int read_tiff( pic_t *tif_pic, char* filename, hdr_t *h );
 
 // dpx.cpp from Gary Demos
 void dpx_write_float(char *outname, float *pixel_result, short width, short height);
@@ -466,5 +428,10 @@ void  dpx_write_10bit_from_float(char *outname, float *pixel_result, short width
 
 
 // common.cpp
-int planar_float_to_muxed_dpx_buf( float *dst, int width, int height, t_pic *src );
-int muxed_dpx_to_planar_float_buf( t_pic *dst, int width, int height, float *src );
+int planar_float_to_muxed_dpx_buf( float *dst, int width, int height, pic_t *src );
+int muxed_dpx_to_planar_float_buf( pic_t *dst, int width, int height, float *src );
+
+#ifdef OPENCV_ENABLED
+int openCV_resize_picture(  pic_t *dst_pic, pic_t *src_pic  );
+#endif
+
