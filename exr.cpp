@@ -151,25 +151,41 @@ void read_exr( pic_t *dst_pic, char *filename )
     
     int pic_width = dataw.max.x - dataw.min.x + 1;
     int pic_height = dataw.max.y - dataw.min.y + 1;
+ 
     
+    if( dst_pic->width != pic_width  ){
+        printf("read_exr(): overriding picture width(%d) to exr header value(%d)\n", dst_pic->width, pic_width );
+    }
+
+    if( dst_pic->height != pic_height  ){
+        printf("read_exr(): overriding picture width(%d) to exr header value(%d)\n", dst_pic->height, pic_height );
+    }
+
+    if( dst_pic->bit_depth != 32  ){
+        printf("read_exr(): overriding bit_depth(%d) to 32-bits (internal processing)\n", dst_pic->bit_depth );
+    }
+    
+    if( dst_pic->matrix_coeffs != MATRIX_GBR  ){
+        printf("read_exr(): overriding matrix_coeffs(%d) to MATRIX_GBR(%d)\n", dst_pic->matrix_coeffs, MATRIX_GBR );
+    }
+
     dst_pic->width = pic_width;
     dst_pic->height = pic_height;
+    
     dst_pic->chroma_format_idc = CHROMA_444;
     dst_pic->bit_depth = 32;
-    dst_pic->chroma_sample_loc_type = 0;
-    dst_pic->transfer_characteristics = TRANSFER_LINEAR;
-    dst_pic->colour_primaries = COLOR_PRIMARY_BT709;
-    dst_pic->video_full_range_flag = 1;
+//    dst_pic->chroma_sample_loc_type = 0;
+//    dst_pic->transfer_characteristics = TRANSFER_LINEAR;
+//    dst_pic->colour_primaries = COLOR_PRIMARY_BT709;
+ //   dst_pic->video_full_range_flag = 1;
     dst_pic->matrix_coeffs = MATRIX_GBR;
     
+    dst_pic->video_full_range_flag = 1;
     
-    
-    // allocate memory now that active picure size is read from file header
-    dst_pic->fbuf[0] = (float *) malloc( pic_width * pic_height * sizeof( float) );
-    dst_pic->fbuf[1] = (float *) malloc( pic_width * pic_height * sizeof( float) );
-    dst_pic->fbuf[2] = (float *) malloc( pic_width * pic_height * sizeof( float) );
+    init_pic( dst_pic, dst_pic->width, dst_pic->height, dst_pic->chroma_format_idc,    dst_pic->bit_depth,   dst_pic->video_full_range_flag,   dst_pic->colour_primaries,   dst_pic->transfer_characteristics,   dst_pic->matrix_coeffs,   dst_pic->chroma_sample_loc_type, PIC_TYPE_F32, 0, 0, "exr pic" );
     
     half_float_pixels.resizeErase( pic_height, pic_width );
+    
     
     EXRfile.setFrameBuffer (&half_float_pixels[0][0] - dataw.min.x - dataw.min.y * pic_width, 1, pic_width);
     

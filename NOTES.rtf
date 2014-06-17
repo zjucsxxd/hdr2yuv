@@ -1,0 +1,100 @@
+{\rtf1\ansi\ansicpg1252\cocoartf1265\cocoasubrtf200
+{\fonttbl\f0\fswiss\fcharset0 Helvetica;\f1\fnil\fcharset0 Menlo-Regular;}
+{\colortbl;\red255\green255\blue255;}
+\margl1440\margr1440\vieww10800\viewh8400\viewkind0
+\pard\tx720\tx1440\tx2160\tx2880\tx3600\tx4320\tx5040\tx5760\tx6480\tx7200\tx7920\tx8640\pardirnatural
+
+\f0\fs24 \cf0 \
+get OpenEXR to install in Ubuntu\
+\
+- mode where there is no Dst file  (for stats)\
+- measure undershoot and overshoot. \
+measure PNSR on flat areas separate from busy areas.\
+\
+\
+TODO:\
+- document \
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\pardirnatural
+
+\f1\fs22 \cf0 \CocoaLigature0 \'97autofilename  0 or 1 \
+\pard\tx720\tx1440\tx2160\tx2880\tx3600\tx4320\tx5040\tx5760\tx6480\tx7200\tx7920\tx8640\pardirnatural
+
+\f0\fs24 \cf0 \CocoaLigature1 fseek  to \'97start frame   \
+\
+use parser table from HM\
+\
+.YUV INPUT\
+	\'97 yuv and y4m input\
+	\'97 merge TIFF write from yuv2tiff\
+	\'97 make 422 and 444 .yuv work. \
+\
+ARGS\
+- io_args_t       :   src, dot,   src_used, dst_used,  default_src, default_dst etc.\
+\
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\pardirnatural
+
+\f1\fs22 \cf0 \CocoaLigature0 \
+CLIP:
+\f0\fs24 \CocoaLigature1 \
+\pard\tx720\tx1440\tx2160\tx2880\tx3600\tx4320\tx5040\tx5760\tx6480\tx7200\tx7920\tx8640\pardirnatural
+\cf0 \'97src_clip_range max0,min0,\'85max2,min2\
+\'97dst_clip_range \
+\
+STATS:\
+\'97src_stats 0\
+\'97dst_stats 0\
+- build classifier for finding SDR images that behave like HDR.\
+\'97 Histogram:\
+	\'97 need a range flag or auto-range ?\
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\pardirnatural
+
+\f1\fs22 \cf0 \CocoaLigature0 	\'97-histogram full  auto   8  \
+	- how to handle floats:  convert to 16-bit half-float. or scale to min/max and then quantize to 256 for simple print dump.\
+	- measure how many entries have zero count, outside legal range.\
+\pard\tx720\tx1440\tx2160\tx2880\tx3600\tx4320\tx5040\tx5760\tx6480\tx7200\tx7920\tx8640\pardirnatural
+
+\f0\fs24 \cf0 \CocoaLigature1 \
+RESAMPLER:\
+\'97chroma_resampling_hint  (SMPTE 2050)\
+\
+SCALER:\
+\'97 make float. \
+\'97 merge openCV\
+\
+MISC:\
+check to see if dst_file already exists.  \
+\'97append  or \'97-overwrite\
+- change all typedef\'92s to end in _t\
+- get rid of src and dst_ ?  use order based on when \'97src_filename is specified.  (everything after is \'97dst)\
+- accept script file (like .cfg)\
+- multi-frame process\
+\
+TEMPORAL DITHERING\
+\'97dither\
+\
+BUFFER MANAGEMENT:\
+ Manage a global pool of planar buffers in &h \
+ Pass pointers to stages if stage can be skipped\
+\
+Y\'92U\'92\'92V\'92\'92\
+      - y\'92u\'92v\'92:  subsample in u\'92v\'92 instead of XZ\
+- add y\'92u\'92v\'92   and y\'92u\'92\'92v\'92\'92\
+- add histogram generator (with quantize option)\
+\
+CONVERSION:\
+- separate convert into Yuvprime and YCbCr routines\
+\
+SUPER_SCALER:\
+- blackman/hanning \
+- directional filters. \
+- bright_mean\
+- lanconz. \
+- gary filter\
+\
+PATTERN:\
+- measure DCT entropy for pattern6\
+- experiment with different percentages.\
+\
+- how to use the metadata to drive ACES workflow. etc. \
+(extract VUI from decoder, use to drive aces)\
+}

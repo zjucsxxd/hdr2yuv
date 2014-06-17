@@ -48,7 +48,7 @@ struct type_info_t
 static struct type_info_t input_file_types[] =
 {
     { INPUT_FILE_TYPE_UNDEFINED, "UNDEFINED", 0 },
-    { INPUT_FILE_TYPE_YUV, "yuv", 0 },
+    { INPUT_FILE_TYPE_YUV, "yuv", 1 },
     { INPUT_FILE_TYPE_TIFF, "tiff", 1 },
     { INPUT_FILE_TYPE_EXR, "exr", 1 },
     { INPUT_FILE_TYPE_Y4M, "y4m", 0 },
@@ -291,7 +291,7 @@ typedef struct
 #define MAX_BIT_DEPTH   16
 
 #define PIC_TYPE_U16    1
-#define PIC_TYPE_FLOAT  2
+#define PIC_TYPE_F32  2
 
 #define MAX_CC  3       // maximum component channels (color sample planes)
 
@@ -414,7 +414,7 @@ int write_exr_file( char *filename, int pic_width, int pic_height, int half_floa
 
 // convert.cpp
 int convert( pic_t *out_pic, hdr_t *h, pic_t *in_pic );
-int write_yuv(  char *filename, hdr_t *h, pic_t *in_pic );
+int write_yuv(  char *filename, hdr_t *h, pic_t *in_pic, int src_bit_depth );
 int matrix_convert( pic_t *out_pic, hdr_t *h, pic_t *in_pic );
 
 // tiff.cpp
@@ -430,6 +430,11 @@ void  dpx_write_10bit_from_float(char *outname, float *pixel_result, short width
 // common.cpp
 int planar_float_to_muxed_dpx_buf( float *dst, int width, int height, pic_t *src );
 int muxed_dpx_to_planar_float_buf( pic_t *dst, int width, int height, float *src );
+void pic_stats( pic_t *pic, pic_stats_t *stats, int print_stats );
+void copy_pic_vars( pic_t *dst, pic_t *src );
+int init_pic( pic_t *pic, int width, int height, int chroma_format_idc, int bit_depth, int video_full_range_flag, int colour_primaries, int transfer_characteristics, int matrix_coeffs, int chroma_sample_loc_type, int sample_type, int half_float_flag, int verbose_level, const char *name );
+int deinit_pic( pic_t *pic );
+void set_pic_clip( pic_t *pic );
 
 #ifdef OPENCV_ENABLED
 int openCV_resize_picture(  pic_t *dst_pic, pic_t *src_pic  );

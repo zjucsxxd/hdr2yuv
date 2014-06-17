@@ -91,7 +91,31 @@ int read_tiff( pic_t *tif_pic, char* filename, hdr_t *h )
     uint32 packed_sample_start_idx = 0;
     
     
+    if( ti.BitsPerSample != bit_depth ){
+        printf("WARNING, read_tiff(): overriding used-specified bit_depth(%d) to tiff header value(%d)\n", bit_depth, ti.BitsPerSample );
+        bit_depth = ti.BitsPerSample;
+    }
     
+    
+    if( ti.ImageWidth != pic_width ){
+        printf("WARNING, read_tiff(): overriding used-specifiedpic_width(%d) to tiff header value(%d)\n", pic_width, ti.ImageWidth );
+        pic_width = ti.ImageWidth;
+    }
+    
+    if( ti.ImageLength != pic_height ){
+        printf("WARNING, read_tiff(): overriding used-specified pic_height(%d) to tiff header value(%d)\n", pic_height, ti.ImageLength );
+        pic_height = ti.ImageWidth;
+    }
+    
+    if( ti.SamplesPerPixel == 3 && chroma_format_idc != CHROMA_444){
+        printf("WARNING, read_tiff(): overriding used-specified chroma_format_idc(%d) to tiff header value(%d)\n", chroma_format_idc, CHROMA_444 );
+        chroma_format_idc = CHROMA_444;
+    } else if ( ti.SamplesPerPixel != 3 ){
+        printf("ERROR, read_tiff(): SamplesPerPixel(%d) not equal to 3\n", ti.SamplesPerPixel );
+    }
+
+
+ 
     // Defaults to process as 16 bit
  
     short numChan2 = 3*2; // only 3 channels rgb with no alpha
@@ -198,25 +222,40 @@ int read_tiff( pic_t *tif_pic, char* filename, hdr_t *h )
     
     // intermediate 16 bit values for final Y' and subsamples color difference
     
-    unsigned short** YP;
     int arraySizeX = stripsize/numChan2 - packed_sample_start_idx/numChan2; // eg 3840
     int arraySizeY = numStrips-2*stripStart;
     
     printf("Frame size: %d x %d\n",arraySizeX, arraySizeY);
     
-    int arraySizeXH = arraySizeX/2; // eg 1920 cols
-    int arraySizeYH = arraySizeY/2; // eg 1080 rows
     
+    // now, from opening the .tiff file, we know how big the picture is and can initialize its bufffer..
+  //   chroma_format_idc = CHROMA_444;
+//    int bit_depth = 16;
+//    int video_full_range_flag = ua->src_video_full_range_flag; // TODO: check this against stats
+//    int colour_primaries = h->in_pic.colour_primaries;
+//    int transfer_characteristics = h->in_pic.transfer_characteristics;
+//    int matrix_coeffs;
+//    int chroma_sample_loc_type;
+//    int half_float_flagl
+    if( bit_depth != 16 ){
+        printf("WARNING, read_tiff(): bit_depth(%d) != 16-bit precision assumed for tiff input samples\n", bit_depth);
+        bit_depth = 16;
+    }
+    if( chroma_format_idc != CHROMA_444 ){
+        printf("WARNING, read_tiff(): chroma_format_idc(%d) != CHROMA_444 assumed for tiff input\n", chroma_format_idc );
+        chroma_format_idc = CHROMA_444;
+    }
+    if( matrix_coeffs != MATRIX_GBR ){
+        printf("WARNING, read_tiff(): matrix_coefs(%d) != MATRIX_GBR assumed for tiff input\n",  matrix_coeffs);
+        matrix_coeffs = MATRIX_GBR;
+    }
     
+    init_pic( tif_pic, arraySizeX, arraySizeY, chroma_format_idc,   bit_depth,   video_full_range_flag,   colour_primaries,   transfer_characteristics,   matrix_coeffs,   chroma_sample_loc_type, PIC_TYPE_U16, 0, 0, "tiff_pic" );
+
+//    tif_pic->buf[0] = (unsigned short*) malloc(arraySizeX*arraySizeY*sizeof(unsigned short));
+//    tif_pic->buf[1] = (unsigned short*) malloc(arraySizeX*arraySizeY*sizeof(unsigned short));
+//    tif_pic->buf[2] = (unsigned short*) malloc(arraySizeX*arraySizeY*sizeof(unsigned short));
     
-    tif_pic->buf[0] = (unsigned short*) malloc(arraySizeX*arraySizeY*sizeof(unsigned short));
-    tif_pic->buf[1] = (unsigned short*) malloc(arraySizeX*arraySizeY*sizeof(unsigned short));
-    tif_pic->buf[2] = (unsigned short*) malloc(arraySizeX*arraySizeY*sizeof(unsigned short));
-    
-    
- //   h->in_pic.buf[0] = (unsigned short*) malloc(arraySizeX*arraySizeY*sizeof(unsigned short));
- //   h->in_pic.buf[1] = (unsigned short*) malloc(arraySizeX*arraySizeY*sizeof(unsigned short));
- //   h->in_pic.buf[2] = (unsigned short*) malloc(arraySizeX*arraySizeY*sizeof(unsigned short));
     
     
     // Reduce numStrips to what is needed to center cut:
@@ -326,7 +365,7 @@ int read_tiff( pic_t *tif_pic, char* filename, hdr_t *h )
 // that is why write_yuv() is here.
 // only tiff.cpp is supposed to link to the tiff library, not other .cpp files.
 
-int write_yuv( char *filename, hdr_t *h, pic_t *pic )
+int write_yuv( char *filename, hdr_t *h, pic_t *pic, int src_bit_depth )
 {
   //      t_user_args *ua = &(h->user_args);
     
@@ -338,6 +377,8 @@ int write_yuv( char *filename, hdr_t *h, pic_t *pic )
     int matrix_coeffs = pic->matrix_coeffs;
     int video_full_range_flag = pic->video_full_range_flag;
     
+    clip_limits_t *clip = &(pic->clip);
+
   //  int arraySizeXC = arraySizeX/2; // eg 1920 cols
   ///  int arraySizeYC = arraySizeY/2; // eg 1080 rows
     
@@ -350,14 +391,16 @@ int write_yuv( char *filename, hdr_t *h, pic_t *pic )
     
     
     // TODO: make this pic->bit_depth
-    int down_shift = (pic->bit_depth - h->out_pic.bit_depth);
+    int down_shift = ( src_bit_depth - pic->bit_depth);
     
     if( down_shift < 0 )
         
     {
-        printf("ERROR: dst bitdepth(%d) > src bitdepth(%d)\n", h->out_pic.bit_depth, pic->bit_depth );
+        printf("ERROR: dst bitdepth(%d) > src bitdepth(%d)\n", pic->bit_depth, src_bit_depth );
         exit(0);
     }
+    else
+        printf("write_yuv(): shifting samples down by %d bits (from %d to %d)\n", down_shift, src_bit_depth, pic->bit_depth );
     
     {
         static char tbuf[256];
@@ -410,7 +453,7 @@ int write_yuv( char *filename, hdr_t *h, pic_t *pic )
     // shift data down to desired bit depth
     
 //    pic->plane[0].width;
-  
+    
     int ph = pic->plane[0].height;
     int pw = pic->plane[0].width;
     
@@ -424,16 +467,17 @@ int write_yuv( char *filename, hdr_t *h, pic_t *pic )
             // (10 bits) Line[c] = (((YP[c][r]+2)>>2));
             // limit to video range (for 16 bits then shift later)
             unsigned short Y =  Yptr[c];
-
-#ifdef CLIP_TIFF
-            if( video_full_range_flag==0) {
-               Y = (Y < h->minVR) ? h->minVR : Y;
-                Y = (Y > h->maxVR) ? h->maxVR : Y;
-            }
-#endif
-
-            Yptr[c] = Y;
             Y = Y >> down_shift;
+
+            if( video_full_range_flag==0) {
+                Y = (Y < clip->minVR) ? clip->minVR : Y;
+                Y = (Y > clip->maxVR) ? clip->maxVR : Y;
+            } else {
+//                Y = (Y < clip->minCV) ? clip->minCV : Y;  // redundant
+                Y = (Y > clip->maxCV) ? clip->maxCV : Y;
+            }
+            
+            Yptr[c] = Y;
             Line[c] = Y;
             //printf(" Line[%d] = %d,  YP[%d][%d] = %d  ",c,Line[c],c,r/Users/chadfogg/Documents/Src/Traffic_2560x1600_420p_10bits.yuv,YP[c][r]);
         }
@@ -456,15 +500,16 @@ int write_yuv( char *filename, hdr_t *h, pic_t *pic )
             // (10 bits) Line[c] = (((DzP[c][r]+2)>>2));
        
             unsigned short Cb = CbPtr[c];
-
-#ifdef CLIP_TIFF
-            if(video_full_range_flag==0) {
-                
-                Cb = (Cb < h->minVRC) ? h->minVRC : Cb;
-                Cb = (Cb > h->maxVRC) ? h->maxVRC : Cb;
-            }
-#endif
             Cb = Cb >> down_shift;
+
+            if(video_full_range_flag==0) {
+                Cb = (Cb < clip->minVRC) ? clip->minVRC : Cb;
+                Cb = (Cb > clip->maxVRC) ? clip->maxVRC : Cb;
+            } else {
+   //             Cb = (Cb < clip->minCV) ? clip->minCV : Cb; // redundant
+                Cb = (Cb > clip->maxCV) ? clip->maxCV : Cb;
+            }
+
             CbPtr[c] = Cb;
             Line[c] = Cb;
         }
@@ -486,15 +531,17 @@ int write_yuv( char *filename, hdr_t *h, pic_t *pic )
             // (10 bits) Line[c] = (((DxP[c][r]+2)>>2));
             
             unsigned short Cr = CrPtr[c];
+            Cr = Cr >> down_shift;
 
-#ifdef CLIP_TIFF
             if(video_full_range_flag==0) {
             
-                Cr = (Cr < h->minVRC) ? h->minVRC : Cr;
-                Cr = (Cr > h->maxVRC) ? h->maxVRC : Cr;
+                Cr = (Cr < clip->minVRC) ? clip->minVRC : Cr;
+                Cr = (Cr > clip->maxVRC) ? clip->maxVRC : Cr;
+            } else {
+                //             Cr = (Cr < clip->minCV) ? clip->minCV : Cr; // redundant
+                Cr = (Cr > clip->maxCV) ? clip->maxCV : Cr;
             }
-#endif
-            Cr = Cr >> down_shift;
+            
             CrPtr[c] = Cr;
             Line[c] = Cr;
         }
