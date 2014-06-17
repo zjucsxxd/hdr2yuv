@@ -567,9 +567,18 @@ void read_planar_integer_file( pic_t *dst, char *filename, int file_type, int st
         // order is R,G,B in the JCT adhoc's  ... not G,B,R like our internal format here
         
         // assume each input sample is contained (LSB justified) in one 16-bit short.
-        b += fread( dst->buf[2], sizeof( unsigned short), y_size, in_file_ptr );  // R
-        b += fread( dst->buf[0], sizeof( unsigned short), y_size, in_file_ptr );  // G
-        b += fread( dst->buf[1], sizeof( unsigned short), y_size, in_file_ptr );  // B
+        if( file_type == INPUT_FILE_TYPE_RGB )
+        {
+            b += fread( dst->buf[2], sizeof( unsigned short), y_size, in_file_ptr );  // R
+            b += fread( dst->buf[0], sizeof( unsigned short), y_size, in_file_ptr );  // G
+            b += fread( dst->buf[1], sizeof( unsigned short), y_size, in_file_ptr );  // B
+        }
+        else
+        {
+            b += fread( dst->buf[0], sizeof( unsigned short), y_size, in_file_ptr );  // R
+            b += fread( dst->buf[1], sizeof( unsigned short), c_size, in_file_ptr );  // G
+            b += fread( dst->buf[2], sizeof( unsigned short), c_size, in_file_ptr );  // B
+        }
         
         if( b!= size )
         {
@@ -653,7 +662,7 @@ int main (int argc, char *argv[])
             //   check x264 convention matches vooya.de
             
             // add .yuv next
-            read_planar_integer_file( in_pic, ua->src_filename, INPUT_FILE_TYPE_RGB, ua->src_start_frame, ua->verbose_level );
+            read_planar_integer_file( in_pic, ua->src_filename, ua->input_file_type, ua->src_start_frame, ua->verbose_level );
         
             // TODO: check that range indicated by full_range_flag is being observed
             
