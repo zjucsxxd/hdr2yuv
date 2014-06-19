@@ -874,7 +874,7 @@ int convert( pic_t *out_pic, hdr_t *h, pic_t *in_pic )
 }
 
 
-// convert a 4:4:4 planar picture to 4:4:4 planar picture with a color difference matrix
+// 4:4:4  RGB ---> YCbCr  and OETF
 
 int matrix_convert( pic_t *out_pic, hdr_t *h, pic_t *in_pic )
 {
@@ -894,10 +894,10 @@ int matrix_convert( pic_t *out_pic, hdr_t *h, pic_t *in_pic )
     printf("matrix() -- clip:  Half(%d), MinCV(%d) MaxCV(%d) MinVR(%d) MaxVR(%d) MinVRC(%d) MaxVRC(%d)",
            clip->Half, clip->minCV, clip->maxCV, clip->minVR, clip->maxVR, clip->minVRC , clip->maxVRC );
     
- //   out_pic->width = in_pic->width;
- //   out_pic->width = in_pic->width;
+    //   out_pic->width = in_pic->width;
+    //   out_pic->width = in_pic->width;
     
-    user_args_t *ua = &(h->user_args);
+ //   user_args_t *ua = &(h->user_args);
     
     int width = in_pic->width;
     int height = in_pic->height;
@@ -906,7 +906,7 @@ int matrix_convert( pic_t *out_pic, hdr_t *h, pic_t *in_pic )
     
     if( h->user_args.verbose_level > 0 )
         printf("matrix conversion\n");
-                                          
+    
     // set up alternate differencing equations for Y'DzwDxw
     float tmpF = 0.0;
     float P,Q,RR,S;
@@ -927,7 +927,11 @@ int matrix_convert( pic_t *out_pic, hdr_t *h, pic_t *in_pic )
     float range[MAX_CC];
     float offset[MAX_CC];
     
-    if( in_pic->transfer_characteristics != out_pic->transfer_characteristics )
+    int convert_transfer =  in_pic->transfer_characteristics != out_pic->transfer_characteristics;
+    
+    printf("matrix: convert_transfer(%d)\n", convert_transfer );
+    
+    if( convert_transfer)
     {
         // will convert transfer
         for(int cc=0;cc<MAX_CC;cc++)
@@ -943,7 +947,7 @@ int matrix_convert( pic_t *out_pic, hdr_t *h, pic_t *in_pic )
                        in_pic->stats.f_avg[cc], range[cc], offset[cc] );
         }
     }
- 
+    
     
     // read lines to cover arraySizeY number of lines (e.g. 2160)
     for (int y=0;  y < height; y++)
@@ -979,10 +983,10 @@ int matrix_convert( pic_t *out_pic, hdr_t *h, pic_t *in_pic )
                 
                 // exr content from Technicolor appears to be ranged for 4k nits
                 // we could use stats in read_exr to autoscale..
-
+                
             }
-//            else if(  in_pic->pic_buffer_type == PIC_TYPE_U16 )
-            else 
+            //            else if(  in_pic->pic_buffer_type == PIC_TYPE_U16 )
+            else
             {
                 G = (float) in_pic->buf[0][addr+x];
                 B = (float) in_pic->buf[1][addr+x];
@@ -1005,7 +1009,7 @@ int matrix_convert( pic_t *out_pic, hdr_t *h, pic_t *in_pic )
             
             
             // step 1: convert
-            if( src_transfer != out_pic->transfer_characteristics )
+            if( convert_transfer )
             {
                 // perform conversion from src to dst transfer
                 
@@ -1013,7 +1017,7 @@ int matrix_convert( pic_t *out_pic, hdr_t *h, pic_t *in_pic )
                 G = (G - offset[0])/range[0];
                 B = (B - offset[1])/range[1];
                 R = (R - offset[2])/range[2];
-
+                
                 // should probably use function pointers for this next step
                 
                 // step 1: convert to linear (float)
@@ -1084,9 +1088,9 @@ int matrix_convert( pic_t *out_pic, hdr_t *h, pic_t *in_pic )
                     // these transfers are not exactly the same but close enough
                     // for now..
                     else if( out_pic->transfer_characteristics == TRANSFER_BT709
-                        || out_pic->transfer_characteristics == TRANSFER_BT2020_10bit
-                        || out_pic->transfer_characteristics == TRANSFER_BT2020_12bit
-                        || out_pic->transfer_characteristics == TRANSFER_BT601 )
+                            || out_pic->transfer_characteristics == TRANSFER_BT2020_10bit
+                            || out_pic->transfer_characteristics == TRANSFER_BT2020_12bit
+                            || out_pic->transfer_characteristics == TRANSFER_BT601 )
                     {
                         
                         const float DISPGAMMA = 2.4;
@@ -1103,15 +1107,15 @@ int matrix_convert( pic_t *out_pic, hdr_t *h, pic_t *in_pic )
                         printf("WARNING: dst_transfer_characteristics(%d) not supported (yet)\n",
                                out_pic->transfer_characteristics );
                 }
-
+                
                 // scale back
                 // this should be a variable and be checked against whether
                 // the transfer function assumes a fixed map to brightness
-              
+                
                 //    if( in_pic->matrix_coeffs == MATRIX_GBR || in_pic->matrix_coeffs == MATRIX_XYZ )
                 if( out_pic->pic_buffer_type == PIC_TYPE_F32 )
                 {
-            //        float offset = in_pic->video_full_range_flag ?
+                    //        float offset = in_pic->video_full_range_flag ?
                     G = G*range[0] + offset[0];
                     B = B*range[1] + offset[1];
                     R = R*range[2] + offset[2];
@@ -1139,22 +1143,22 @@ int matrix_convert( pic_t *out_pic, hdr_t *h, pic_t *in_pic )
                         R = R*clip->maxVRC + clip->minVRC;
                     }
                 }
-            
+                
             }
             
-               
+            
             if( out_pic->pic_buffer_type == PIC_TYPE_U16 )
             {
                 unsigned int Y;
                 long Cb, Cr,RC,BC;
-
+                
                 //                if( out_pic->matrix_coeffs == MATRIX_GBR ||
                 //                   out_pic->matrix_coeffs == MATRIX_UNSPECIFIED
                 //                   || out_pic->matrix_coeffs == MATRIX_RESERVED  )
-               
+                
                 if( out_pic->matrix_coeffs == in_pic->matrix_coeffs &&
                    out_pic->colour_primaries == in_pic->colour_primaries  )
-                
+                    
                 {  // RGB to RGB  or YUV to YUV
                     Y = (unsigned int)G;
                     Cb = (unsigned int)B;
@@ -1163,12 +1167,12 @@ int matrix_convert( pic_t *out_pic, hdr_t *h, pic_t *in_pic )
                 else  // color difference space
                 {
                     if( out_pic->matrix_coeffs == MATRIX_YDzDx ) {
-                
+                        
                         Y = (unsigned int) G;
                         Cb = (int)(-G/2.0  + B/2.0 +0.5); // Dz: -(int)((G+1)>>1) + (int)((B+1)>>1);
                         Cr =  (int)(-G/2.0 +R/2.0 +0.5);  // Dx: (int)((R+1)>>1) - (int)((G+1)>>1);
-                //printf("Y: %d, Dz: %d, Dz: %d\n",Y,Dz,Dx);
-                
+                        //printf("Y: %d, Dz: %d, Dz: %d\n",Y,Dz,Dx);
+                        
                     } else if( out_pic->matrix_coeffs == MATRIX_BT2020nc ){
                         tmpF = (0.2627*R + 0.6780*G + 0.0593*B) +0.5;
                         Y = (unsigned int)(tmpF);
@@ -1180,7 +1184,7 @@ int matrix_convert( pic_t *out_pic, hdr_t *h, pic_t *in_pic )
                         Cb = (int)((B - tmpF)/1.8556 + 0.5);
                         Cr = (int)((R - tmpF)/1.5748 + 0.5);
                     } else if(out_pic->matrix_coeffs == MATRIX_YDzDx_Y100
-                      || out_pic->matrix_coeffs == MATRIX_YDzDx_Y500) {
+                              || out_pic->matrix_coeffs == MATRIX_YDzDx_Y500) {
                         Y = (unsigned int)(G);
                         Cb = (int)( P *G + Q*B + 0.5);
                         Cr = (int)( RR*R + S*G + 0.5);
@@ -1192,14 +1196,14 @@ int matrix_convert( pic_t *out_pic, hdr_t *h, pic_t *in_pic )
                         printf("Can't determine color difference to use?\n\n");
                         exit(0);
                     }
- 
+                    
                     Cb = Cb + clip->Half - 1;
                     Cr = Cr + clip->Half - 1;
                 }
-                                          
-            
-            //printf("Y: %d, Dz: %d, Dz: %d\n",Y,Dz,Dx);
-            // clamp to full range
+                
+                
+                //printf("Y: %d, Dz: %d, Dz: %d\n",Y,Dz,Dx);
+                // clamp to full range
                 if( Y > clip->maxCV) Y=clip->maxCV;
                 if( Y < clip->minCV) Y=clip->minCV;
                 
@@ -1207,10 +1211,10 @@ int matrix_convert( pic_t *out_pic, hdr_t *h, pic_t *in_pic )
                 if( Cb < clip->minCV) Cb=clip->minCV;
                 if( Cr > clip->maxCV) Cr=clip->maxCV;
                 if( Cr < clip->minCV) Cr=clip->minCV;
-            //printf("Y: %d, Dz: %d, Dz: %d\n",Y,Dz,Dx);
-            
+                //printf("Y: %d, Dz: %d, Dz: %d\n",Y,Dz,Dx);
+                
                 int dst_addr =  y*width + x;
-            
+                
                 out_pic->buf[0][ dst_addr ]= Y;
                 out_pic->buf[1][ dst_addr ]= Cb;
                 out_pic->buf[2][ dst_addr ]= Cr;
@@ -1219,7 +1223,7 @@ int matrix_convert( pic_t *out_pic, hdr_t *h, pic_t *in_pic )
             {
                 float Y;
                 float Cb, Cr,RC,BC;
-
+                
                 // TODO: just swap pointers in a general frame buffer memory pool
 #if 0
                 int dst_addr =  y*width + x;
@@ -1228,15 +1232,15 @@ int matrix_convert( pic_t *out_pic, hdr_t *h, pic_t *in_pic )
                 out_pic->fbuf[2][ dst_addr ]= R;
 #endif
                 
- //               if( out_pic->matrix_coeffs == MATRIX_GBR ||
- //                  out_pic->matrix_coeffs == MATRIX_UNSPECIFIED
- //                  || out_pic->matrix_coeffs == MATRIX_RESERVED  )
-
+                //               if( out_pic->matrix_coeffs == MATRIX_GBR ||
+                //                  out_pic->matrix_coeffs == MATRIX_UNSPECIFIED
+                //                  || out_pic->matrix_coeffs == MATRIX_RESERVED  )
+                
                 if( out_pic->matrix_coeffs == in_pic->matrix_coeffs &&
                    out_pic->colour_primaries == in_pic->colour_primaries  )
                     
                 {  // RGB
-                     Y = G;
+                    Y = G;
                     Cb = B;
                     Cr = R;
                 }
@@ -1310,6 +1314,688 @@ int matrix_convert( pic_t *out_pic, hdr_t *h, pic_t *in_pic )
     return 0;
 }
 
-//#endif
 
+// assumes any resizing such as 4:2:0 to 4:4:4 resampling has already taken place..
+
+int matrix_inverse( pic_t *out_pic, hdr_t *h, pic_t *in_pic )
+{
+    
+    // set up to handle inverse color difference
+    short D709 = in_pic->matrix_coeffs == MATRIX_BT709;
+    short D2020 = in_pic->matrix_coeffs == MATRIX_BT2020c;
+ //   short DYUVPRIME2 = in_pic->matrix_coeffs == MA;
+   // float tmpF = 0.0;
+    short HD = h->user_args.cutout_hd; // ==1 if 1920x1080 cutout
+    short qHD = h->user_args.cutout_qhd; // ==1 if 960x540 cutout
+//    int frames = -999;
+ //   short IPixF = 0;
+    short Y500 =0;
+    short Y100 =0;
+    short DXYZ = 1;
+//    short BD = 12; // 10 bit mode
+  //  short SR=4;
+    unsigned short Half = 2048.0; // e.g half value 12 bits
+    unsigned short Full = 4096.0; //
+  //  short XX = 0;
+//    unsigned short minCV = 0; //12 bits
+//    unsigned short maxCV = 4095;
+//    short FIR = 1;
+    short FULLRANGE = 0; // default is video range
+ //   short ALPHA = 0; // no alpha channel is default
+ //   short numChan2 = 3*2; // only 3 channels rgb with no alpha
+   // short numChan = 3;
+//    unsigned short D = 4; //D=4 for 12 bits =1 10bits = 16 for 14 bits
+//   unsigned short minVR, maxVR, minVRC,maxVRC;
+    // video range is
+    // Luma and R,G,B:  CV = Floor(876*D*N+64*D+0.5)
+    // Chroma:  CV = Floor(896*D*N+64*D+0.5)
+    
+    int invalidPixels = 0;
+    
+    clip_limits_t  *clip = &(in_pic->clip);
+    
+    //Process Args:
+#if 0
+    if( ALPHA ){
+        	numChan2= 4*2;
+     		numChan = 4;
+    }
+        
+    // B12 is by default
+    if( in_pic->bit_depth == 10 ) {
+            BD = 10;
+            SR=6;
+            Half = 512.0;
+            Full = 1024.0;
+            minCV = 0;
+            maxCV = 1023;
+            D=1;
+            printf("\nprocessing line data 10 bits\n");
+        }
+        
+        if( in_pic->bit_depth == 14 ) {
+            BD = 14;
+            SR=2;
+            Half = 8192;
+            Full = 16384;
+            minCV = 0;
+            maxCV = 16383;
+            D=16;
+            printf("\nprocessing line data 14 bits\n");
+        }
+#endif
+        if( in_pic->matrix_coeffs == D709 || in_pic->matrix_coeffs == D2020 || in_pic->matrix_coeffs == Y100 || in_pic->matrix_coeffs == Y500 )
+            DXYZ = 0;
+        
+  //      if(strcmp(argv[arg],"-I")==0)IPixF = 1;
+    //    if(strcmp(argv[arg],"-X")==0)XX = 1;
+        
+      //  if(strcmp(argv[arg],"-f")==0) {
+		//	arg++;
+		//	if(arg < argc)frames=atoi(argv[arg]);
+      //  }
+        
+        //arg++;
+    //}
+    
+    
+    if(D709)printf("Processing for Rec709\n");
+    if(D2020)printf("Processing for Rec2020\n");
+//    if(DYUVPRIME2)printf("Processing for Y'u''v'' (Y=rho-gamma, u'',v'' = linear)\n");
+    if(HD)printf("Processing for HD1920x1080\n");
+    if(qHD)printf("Processing for HD960x540\n");
+#if 0
+    // Set up for video range if needed
+    if(!FULLRANGE) {
+        printf("Processing for Video Range\n");
+        minVR = 64*D;
+        maxVR = 876*D+minVR;
+        minVRC = minVR;
+        maxVRC = 896*D+minVRC;
+        //achromatic point fo r chroma will be "Half"(e.g. 512 for 10 bits, 2048 for 12 bits etc..)
+        
+    }
+#endif
+    
+#if 0
+    stripsize = 3840*numChan2;
+    stripStart =0;
+    pixelStart = 0;
+    if(HD) {
+        stripsize = 1920*numChan2;
+        numStrips = 1080;
+    }
+    if(qHD) {
+        stripsize= 960*numChan2;
+        numStrips = 540;
+    }
+    printf ("Stripsize (bytes): %d, %d (pixels), numStrips %d \n",stripsize, stripsize/8, numStrips);
+    
+    // Saving Invalid Pixel Data as InvalidPixel.txt:
+    ofstream invPix;
+    if(IPixF) invPix.open("InvalidPixel.txt");
+#endif
+    
+    // set up alternate differencing equations for Y'DzwDxw
+    float T,U,V,W;
+    if (Y100) {
+        printf("Setting TUVW for 100nit PQ color difference point\n");
+        T = 0.98989899;
+        U = 2.0;
+        V = 1.016835017;
+        W = 2.03367;
+    } else if(Y500) {
+        printf("Setting TUVW for 500nit PQ color difference point\n");
+        T = 0.99203764;
+        U = 2.0;
+        V = 1.013391241;
+        W = 2.026782;
+    }
+
+#if 0
+    // Readign array (stripsize/numChan2 = 3840 unsigned shorts)
+    unsigned short *yuvLine;
+    // Array to store line of output for writing process
+    // will be allocated to line width with 4 unsigned shorts
+    unsigned short *Line;
+    
+    // Allocate memory to read each image
+    unsigned short** YP;
+    int arraySizeX = stripsize/numChan2 - pixelStart/numChan2; // eg 3840
+    int arraySizeY = numStrips;
+    int arraySizeXH = arraySizeX/2; // eg 1920 cols
+    int arraySizeYH = arraySizeY/2; // eg 1080 rows
+    printf("Frame Size: %d x %d\n",arraySizeX,arraySizeY);
+    YP = (unsigned short**) malloc(arraySizeX*sizeof(unsigned short*)); // cols
+    for (int i = 0; i < arraySizeX; i++)
+        YP[i] = (unsigned short*) malloc(arraySizeY*sizeof(unsigned short)); //rows
+    
+    // allocate for 444 chroma
+    
+    unsigned short** Cb444;
+    Cb444 = (unsigned short**) malloc(arraySizeX*sizeof(unsigned short*)); // cols
+    for (int i = 0; i < arraySizeX; i++)
+        Cb444[i] = (unsigned short*) malloc(arraySizeY*sizeof(unsigned short)); //rows
+    
+    unsigned short** Cr444;
+    Cr444 = (unsigned short**) malloc(arraySizeX*sizeof(unsigned short*)); // cols
+    for (int i = 0; i < arraySizeX; i++)
+        Cr444[i] = (unsigned short*) malloc(arraySizeY*sizeof(unsigned short)); //rows
+    
+    // allocate for 420 chroma
+    unsigned short** DzP;
+    DzP = (unsigned short**) malloc(arraySizeXH*sizeof(unsigned short*)); // cols
+    for (int i = 0; i < arraySizeXH; i++)
+        DzP[i] = (unsigned short*) malloc(arraySizeYH*sizeof(unsigned short)); // rows
+    
+    unsigned short** DxP;
+    DxP = (unsigned short**) malloc(arraySizeXH*sizeof(unsigned short*)); // cols
+    for (int i = 0; i < arraySizeXH; i++)
+        DxP[i] = (unsigned short*) malloc(arraySizeYH*sizeof(unsigned short)); // rows
+    
+    // set output line array to unsigned short
+    Line =  (unsigned short *)malloc(((numChan2/2)*arraySizeX*sizeof(unsigned short)));
+    
+    yuvLine = (unsigned short *) malloc(arraySizeX*sizeof(unsigned short));
+    
+    
+	// Open yuv file
+	// Open Binary PlanarYUV file for reading:
+	yuvIn.open(argv[1], ios::in | ios::binary);
+	printf("Opened YDzDx.yuv reading...:\n");
+    
+	// process yuv
+	int tifNum = 0;
+	char tifName[] = "tifXYZ/XpYpZp00000.tif";
+	int line = 0;
+	int pixel = 0;
+	while(yuvIn)
+	{
+		YnegRMx=0;
+		YnegBMx=0;
+		// read Y' data
+		for ( line = 0;line < arraySizeY;line++)
+		{
+			yuvIn.read((char *)yuvLine, arraySizeX*sizeof(unsigned short));
+			for ( pixel = 0; pixel < arraySizeX;pixel++) {
+				YP[pixel][line] = yuvLine[pixel];
+				//printf(" YP[%d][%d]= %d ",pixel,line,YP[pixel][line]);
+				if(!FULLRANGE) {
+					YP[pixel][line] = (YP[pixel][line]<minVR) ? minVR : YP[pixel][line];
+					YP[pixel][line] = (YP[pixel][line]>maxVR) ? maxVR : YP[pixel][line];
+				}
+			}
+		}
+		
+		// read Dz data
+		for ( line = 0;line < arraySizeY/2;line++)
+		{
+			yuvIn.read((char *)yuvLine, arraySizeX*sizeof(unsigned short)/2);
+			for ( pixel = 0; pixel < arraySizeX/2;pixel++){
+				DzP[pixel][line] = yuvLine[pixel];
+				if(!FULLRANGE) {
+					DzP[pixel][line] = (DzP[pixel][line]<minVRC) ? minVRC : DzP[pixel][line];
+					DzP[pixel][line] = (DzP[pixel][line]>maxVRC) ? maxVRC : DzP[pixel][line];
+				}
+			}
+		}
+        
+		// read Dx data
+		for ( line = 0;line < arraySizeY/2;line++)
+		{
+			yuvIn.read((char *)yuvLine, arraySizeX*sizeof(unsigned short)/2);
+			for ( pixel = 0; pixel < arraySizeX/2;pixel++) {
+				DxP[pixel][line] = yuvLine[pixel];
+				if(!FULLRANGE) {
+					DxP[pixel][line] = (DxP[pixel][line]<minVRC) ? minVRC : DxP[pixel][line];
+					DxP[pixel][line] = (DxP[pixel][line]>maxVRC) ? maxVRC : DxP[pixel][line];
+				}
+			}
+		}
+       
+
+		printf("Writing tifXYZ/XpYpZp%05d.tif\n",tifNum);
+		// Open TIF File
+		sprintf(tifName, "tifXYZ/XpYpZp%05d.tif",tifNum);
+		invalidPixels = 0;
+		
+		tif = TIFFOpen(tifName, "w");
+		if(ALPHA) {
+            TIFFSetField(tif, TIFFTAG_SAMPLESPERPIXEL, 4);
+		} else {
+            TIFFSetField(tif, TIFFTAG_SAMPLESPERPIXEL, 3);
+		}
+		
+		TIFFSetField(tif, TIFFTAG_BITSPERSAMPLE, 16);
+		TIFFSetField(tif, TIFFTAG_PLANARCONFIG, PLANARCONFIG_CONTIG);
+		TIFFSetField(tif, TIFFTAG_IMAGEWIDTH, arraySizeX);
+		TIFFSetField(tif, TIFFTAG_IMAGELENGTH, arraySizeY);
+		TIFFSetField(tif, TIFFTAG_ROWSPERSTRIP, 1);
+		TIFFSetField(tif, TIFFTAG_PHOTOMETRIC, PHOTOMETRIC_RGB);
+		
+		Subsample420to444(DzP, Cb444, arraySizeX, arraySizeY, FIR, minCV,  maxCV);
+		Subsample420to444(DxP, Cr444, arraySizeX, arraySizeY, FIR, minCV,  maxCV);
+#endif
+		
+		for (int line = 0;line < in_pic->height;line++)
+		{
+            int addr = line * in_pic->width;
+            
+			for (unsigned int pixel = 0; pixel < in_pic->width; pixel++ )
+			{
+                float tmpF, Yav, Cb, Cr;
+                float  Rp, Bp;
+                
+                // Y = G = Y
+                // Dz = -0.5*G + 0.5*B  = 0.5*Z - 0.5*Y + 2048
+                // Dx = 0.5*R -0.5*G  = 0.5*X - 0.5*Y  +2048
+                
+                // 4095 = 2047.5 * 2
+                // recall 2047.5 came from adding 2047 to Dz, Dx
+                //  and adding 8 during initial round off from 16bits to 12
+                
+                
+                
+                // Try calculating an average Y to use with subsampled Dz, Dx
+                //Yav = (YP[pixel>>2][line>>1 + line>>1] + YP[1+ pixel>>2][line>>1 + line>>1] + YP[1+pixel>>2][line>>1 + line>>1] + YP[1 + pixel>>2][1 + line>>1 + line>>1])/4;
+            //    Yav = (int)(YP[pixel/numChan][line]);
+                float YavSave = Yav; // keep copy of original Y'
+                
+                if( in_pic->pic_buffer_type == PIC_TYPE_F32 ){
+                    Yav = in_pic->fbuf[0][ addr + pixel ];
+                    Cb = in_pic->fbuf[1][ addr + pixel ];
+                    Cr = in_pic->fbuf[2][ addr + pixel ];
+                } else {
+                    Yav = (float )in_pic->buf[0][ addr + pixel ];
+                    Cb = (float )in_pic->buf[1][ addr + pixel ];
+                    Cr = (float )in_pic->buf[2][ addr + pixel ];
+                }
+   
+#if 0
+                // Calculate Ybar
+                if (XX) {
+                    short p0 = (pixel/numChan) % 2;
+                    short l0 = line % 2;
+                    if(p0 == 0 && l0 == 0) {
+                        Ybar = (int)(YP[pixel/numChan][line]) + (int)(YP[(pixel+numChan)/numChan][line]) + (int)(YP[pixel/numChan][line+1]) + (int)(YP[(pixel+numChan)/numChan][line+1]);
+                        Ybar = Ybar/4;
+                    }
+                    if(p0 == 1 && l0 == 0) {
+                        Ybar = (int)(YP[(pixel-numChan)/numChan][line]) + (int)(YP[pixel/numChan][line]) + (int)(YP[(pixel-numChan)/numChan][line+1]) + (int)(YP[pixel/numChan][line+1]);
+                        Ybar = Ybar/4;
+                    }
+                    if(p0 == 0 && l0 == 1) {
+                        Ybar = (int)(YP[pixel/numChan][line-1]) + (int)(YP[(pixel+numChan)/numChan][line-1]) + (int)(YP[pixel/numChan][line]) + (int)(YP[(pixel+numChan)/numChan][line]);
+                        Ybar = Ybar/4;
+                    }
+                    if(p0 == 1 && l0 == 1) {
+                        Ybar = (int)(YP[(pixel-numChan)/numChan][line-1]) + (int)(YP[pixel/numChan][line-1]) + (int)(YP[(pixel-numChan)/numChan][line]) + (int)(YP[pixel/numChan][line]);
+                        Ybar = Ybar/4;
+                    }
+                    if(Ybar<1)Ybar = 1;
+                    if(Ybar>(Full-1))Ybar=Full-1;
+                }
+#endif
+                
+                
+                if(DXYZ) {
+                    // TODO: re-integrate this...
+                    
+#if 0
+                    if(XX) {
+                        //reconstruct with Ybar then scale
+                        float RED,BLUE;
+                        RED = (2.0*(float)(Cr444[pixel/numChan][line]) - (float)(Full-1.0) + (float)Ybar) * ((float)Yav)/((float)Ybar);
+                        BLUE = (2.0*(float)(Cb444[pixel/numChan][line]) - (float)(Full-1.0) + (float)Ybar) * ((float)Yav)/((float)Ybar);
+                        if(RED>(Full-1.5))RED=Full-1.0;
+                        if(BLUE>(Full-1.5))BLUE=Full-1.0;
+                        Rp = RED;
+                        Bp = BLUE;
+                        
+                    } else {
+#endif
+      //                  Rp = ((int)2*(int)(Cr) - (int)(Full-1.0) + Yav);
+        //                Bp = ((int)2*(int)(Cb) - (int)(Full-1.0) + Yav);
+                        Rp = (2.0*Cr - (Full-1.0) + Yav);
+                        Bp = (2.0*Cb - (Full-1.0) + Yav);
+                    }
+                else if(D2020){
+                    tmpF = ((float)(Cb)-(Half-0.5))*1.8814 + Yav;
+                    if(tmpF > (Full-1.0))tmpF = (Full-1.0);
+                    Bp = tmpF;
+                    tmpF = ((float)(Cr)-(Half-0.5))*1.4746 + Yav;
+                    if(tmpF > (Full-1.0))tmpF = (Full-1.0);
+                    Rp = tmpF;
+                    tmpF = ((float)Yav - 0.0593*(float)Bp -0.2627*(float)Rp)/0.6780 +0.5 ; // green
+                    if(tmpF > (Full-1.0)) tmpF = (Full-1.0);
+                    Yav = tmpF; //green
+                } else if(D709) {
+                    tmpF = ((float)(Cb)-(Half-0.5))*1.8556 + Yav;
+                    if(tmpF > (Full-1.0))tmpF = (Full-1.0);
+                    Bp = tmpF;
+                    tmpF = ((float)(Cr)-(Half-0.5))*1.5748 + Yav;
+                    if(tmpF > (Full-1.0))tmpF = (Full-1.0);
+                    Rp = tmpF;
+                    tmpF = ((float)Yav - 0.07222*(float)Bp -0.2126*(float)Rp)/0.7152 +0.5 ; // green
+                    if(tmpF > (Full-1.0)) tmpF = (Full-1.0);
+                    Yav = tmpF;  //green
+                } else if(Y100 || Y500) {
+                    tmpF = ((float)(Cb)-(Half-0.5))*W + ((float)Yav)*V;
+                    if(tmpF > (Full-1.0))tmpF = (Full-1.0);
+                    Bp = tmpF;
+                    tmpF = ((float)(Cr)-(Half-0.5))*U + ((float)Yav)*T;
+                    if(tmpF > (Full-1.0))tmpF = (Full-1.0);
+                    Rp = tmpF;
+                    
+#if 0
+                }
+                else if(DYUVPRIME2) {
+                    
+                    // Convert Y'u''v'' back to XYZ
+                    const double e = 0.25;
+                    const double ur = 0.1978;
+                    const double vr = 0.4683;
+                    double u1, v1;
+                    
+                    double Y1 = Yav;
+                    unsigned short iu16_u2 = Cb444[pixel/numChan][line];
+                    unsigned short iu16_v2 = Cr444[pixel/numChan][line];
+                    
+                    double u2 = ((double) iu16_u2)/ Full;
+                    double v2 = ((double) iu16_v2)/ Full;
+                    
+                    if( Y1 > 0.0 ){
+                        u1 = (((u2 - ur) * fmax(Y1,e)) / Y1) + ur;
+                        v1 = (((v2 - vr) * fmax(Y1,e)) / Y1) + vr;
+                    }
+                    
+                    double linearY = RHO_GAMMA_f( Y1 );
+                    
+                    double Z = linearY* ((3.0 - 0.75*u1)/v1 - 5.0 );
+                    double X = (linearY*9*u1) / (4*v1);
+                    
+                    ///if(tmpF > (Full-1.0))
+                    // tmpF = (Full-1.0);
+                    
+                    // convert from real-value (0.0 to 1.0) to integer-like range
+                    Z *= Full;
+                    X *= Full;
+                    
+                    if(Z > (Full-1.0))
+                        Z = (Full-1.0);
+                    
+                    if(X > (Full-1.0))
+                        X = (Full-1.0);
+                    
+                    Bp = (int) Z;
+                    Rp = (int) X;
+                    
+                    //               } else if(DYUVPRIME1) {
+#endif
+                } else {
+                    printf("Can't determine color difference to use?\n\n");
+                    exit(0);
+                }
+                
+                int G = (int) Yav;
+                int B = (int) Bp;
+                int R = (int) Rp;
+                    
+                if(G < 0)
+                {
+                    G = 0;
+                    invalidPixels++;
+                  //  if(IPixF)invPix << "Pixel=" << pixel/8 << ", " << line << "  Y'=" << YavSave << "  Dz=" << Cb444[pixel/numChan][line] << "  Dx=" //<< Cr444[pixel/numChan][line] << "  G'=" << Yav << " !! Gneg\n";
+                }
+                
+                if( R < 0 )
+                {
+                    invalidPixels++;
+                    
+                  //  if(IPixF && YavSave>0)invPix << "Pixel=" << pixel/8 << ", " << line << "  Y'=" << YavSave << "  Dz=" << Cb444[pixel/numChan][line] << "  Dx=" << Cr444[pixel/numChan][line] << "  R'=" << Rp << " !! Rneg\n";
+                    
+        //            if(Yav > YnegRMx && Yav > 0)
+          //          {
+      //                  YnegRMx = Yav;
+                 //       printf("Line: %d Pixel: %d, Y %d, Dz: %d, Dx %d, X' %d, YnegRMx %d\n", line,pixel/8, Yav, Cb444[pixel/numChan][line], Cr444[pixel/numChan][line], Rp,YnegRMx);
+            //        }
+                    R = 0; // zero invalid pixels whether Yav == 0 or not
+                    
+    //                if(YavSave != 0)invalidPixels++;
+                }
+                
+                if(B < 0 )
+                {
+                    invalidPixels++;
+                    
+                    //if(IPixF && YavSave>0)invPix << "Pixel=" << pixel/8 << ", " << line << "  Y'=" << YavSave << "  Dz=" << Cb444[pixel/numChan][line] << "  Dx=" << Cr444[pixel/numChan][line] << "  B'=" << Bp << " !! Bneg\n";
+                    
+              //      if(Yav > YnegBMx && Yav > 0)
+                //    {
+                  //      YnegBMx = Yav;
+                      //  printf("Line: %d Pixel: %d, Y %d, Dz: %d, Dx %d, Z' %d,YnegBMx %d\n", line,pixel/8, Yav, Cb444[pixel/numChan][line], Cr444[pixel/numChan][line], Bp, YnegBMx);
+                  //  }
+                    B = 0; // zero invalid pixels whether Yav == 0 or not
+             //       if(YavSave != 0)invalidPixels++;
+                }
+                
+                
+                // Insure RGB are clipped to video range if required:
+                if(!FULLRANGE) {
+                    R = (R< clip->minVR) ? clip->minVR : R;
+                    G = (G<clip->minVR) ? clip->minVR : G;
+                    B = (B<clip->minVR) ? clip->minVR : B;
+                    
+                    R = (R>clip->maxVR) ? clip->maxVR : R;
+                    G = (G>clip->maxVR) ? clip->maxVR : G;
+                    B = (B>clip->maxVR) ? clip->maxVR : B;
+                    
+                }
+                
+             
+                    if( in_pic->bit_depth > out_pic->bit_depth )
+                    {
+                        int shift =in_pic->bit_depth - out_pic->bit_depth;
+                        
+                        R = R >> shift;
+                        G = G >> shift;
+                        B = B >> shift;
+                    } else {
+                        int shift = out_pic->bit_depth - in_pic->bit_depth;
+
+                        R = R << shift;
+                        G = G << shift;
+                        B = B <<  shift;
+                    }
+                    
+                
+                    if( in_pic->pic_buffer_type == PIC_TYPE_F32 ){
+                        out_pic->fbuf[0][ addr + pixel ] = (float )G;
+                        out_pic->fbuf[1][ addr + pixel ] = (float )B;
+                        out_pic->fbuf[2][ addr + pixel ] = (float) R;
+                    } else {
+                        out_pic->buf[0][ addr + pixel ] = G;
+                        out_pic->buf[1][ addr + pixel ] = B;
+                        out_pic->buf[2][ addr + pixel ] = R;
+                    }
+                
+                    
+                    
+                    
+#if 0
+                // R = X = 2*Dx + Y
+                Line[pixel] = ((unsigned short)Rp) << SR;     // R = X
+				
+				// G = Y
+				Line[pixel+1] = ((unsigned short)Yav) << SR;  //G = Y or inverse 2020/709 equation
+				
+				// B = X = 2*Dx + Y
+				Line[pixel+2] = ((unsigned short)Bp) << SR;   // B = Z
+                    
+				// A
+				if(ALPHA) Line[pixel+3] = 65535;  // A
+#endif
+                
+                //printf("Rp=%d   Gp=%d   Bp=%d | ",Line[pixel],Line[pixel+1],Line[pixel+2]);
+                
+			}
+			
+            
+//  			//printf("Writing strip %d with width %d bytes %d pixels\n",line,4*arraySizeX*2,arraySizeX);
+//			TIFFWriteRawStrip(tif, (tstrip_t)line, (tdata_t)Line, numChan2*arraySizeX);
+            
+		}
+
+#if 0
+		TIFFClose(tif);
+		
+		tifNum++;
+		
+		printf("Max YnegR = %d, Max YnegB = %d\n",YnegRMx, YnegBMx);
+		printf("Invalid Pixels:  %d\n",invalidPixels);
+		if(frames > 0) {
+			frames--;
+			if(frames == 0)exit(0);
+		}
+#endif
+            
+//	}
+    
+    
+  //  if(IPixF) invPix.close();
+        return(0);
+}
+
+void Subsample420to444(unsigned short ** src, unsigned short ** dst, short width, short height,short algorithmn,unsigned short minCV, unsigned short maxCV)
+{
+	if(algorithmn == 0) {
+		short widthH = width/2;
+		short heightH = height/2;
+		for (int line = 0;line < heightH;line++)
+		{
+			for (unsigned int pixel = 0; pixel < widthH;pixel++) {
+				dst[2*pixel][2*line] = src[pixel][line];
+				dst[2*pixel+1][2*line] = src[pixel][line];
+				dst[2*pixel][2*line+1] = src[pixel][line];
+				dst[2*pixel+1][2*line+1] = src[pixel][line];
+            }
+        }
+    } else {
+        // Implement FIR filter for 420 to 422 then 444
+        
+        int wH,i, j, j2;
+        int jm6, jm5, jm4, jm3, jm2, jm1, jp1, jp2, jp3, jp4, jp5, jp6, jp7;
+        
+        // width and height come in as of src array
+        
+        
+        // Allocate dst422 storage
+        short w422 = width>>1;
+        short h420 = height>>1;
+        unsigned short** dst422 = (unsigned short**) malloc(w422*sizeof(unsigned short*)); // cols
+        for (i = 0; i < w422; i++)
+            dst422[i] = (unsigned short*) malloc(height*sizeof(unsigned short)); //rows
+        
+        float scale = 256.0;
+        float c3    = 3.0/scale;
+        float c16   = 16.0/scale;
+        float c67  =  67.0/scale;
+        float c227 =  227.0/scale;
+        float c32  =   32.0/scale;
+        float c7   =   7.0/scale;
+        float temp;
+        
+        /* intra frame */
+        for (i=0; i<w422; i++) // w here is half width (e.g. 422 width)
+        {
+            for (j=0; j<h420; j++)
+            {
+                j2 = j<<1;
+                jm3 = (j<3) ? 0 : j-3;
+                jm2 = (j<2) ? 0 : j-2;
+                jm1 = (j<1) ? 0 : j-1;
+                jp1 = (j<h420-1) ? j+1 : h420-1;
+                jp2 = (j<h420-2) ? j+2 : h420-1;
+                jp3 = (j<h420-3) ? j+3 : h420-1;
+                
+                /* FIR filter coefficients (*256): 5 -21 70 228 -37 11 */
+                /* New FIR filter coefficients (*256): 3 -16 67 227 -32 7 */
+                temp =     c3*((float)(src[i][jm3]))
+                -c16*((float)(src[i][jm2]))
+                +c67*((float)(src[i][jm1]))
+                +c227*((float)(src[i][j]))
+                -c32*((float)(src[i][jp1]))
+                +c7*((float)(src[i][jp2]))+0.5;
+                if(temp>maxCV)temp = maxCV;
+                if(temp<minCV)temp = minCV;
+                dst422[i][j2] = (unsigned short)temp;
+                
+                temp = c3*((float)(src[i][jp3]))
+                -c16*((float)(src[i][jp2]))
+                +c67*((float)(src[i][jp1]))
+                +c227*((float)(src[i][j]))
+                -c32*((float)(src[i][jm1]))
+                +c7*((float)(src[i][jm2]))+0.5;
+                if(temp>maxCV)temp = maxCV;
+                if(temp<minCV)temp = minCV;
+                dst422[i][j2+1] = (unsigned short)temp;
+                
+            }
+        }
+        
+        // 422 to 444 now
+        int im2, im1, ip1, ip2, ip3,i2;
+        scale = 256.0;
+        float c21 = 21.0/scale;
+        float c52  = 52.0/scale;
+        float c159 =  159.0/scale;
+        float c256 =  256.0/scale;
+        
+        
+        for (j=0; j<height; j++)
+        {
+            for (i=0; i<w422; i++) // half width (e.g. 422 width)
+            {
+                i2 = i<<1;
+                im2 = (i<2) ? 0 : i-2;
+                im1 = (i<1) ? 0 : i-1;
+                ip1 = (i<w422-1) ? i+1 : w422-1;
+                ip2 = (i<w422-2) ? i+2 : w422-1;
+                ip3 = (i<w422-3) ? i+3 : w422-1;
+                
+                /* FIR filter coefficients (*256): 21 0 -52 0 159 256 159 0 -52 0 21 */
+                /* even samples (0 0 256 0 0) */
+                dst[i2][j] = dst422[i][j];
+                
+                
+                /* odd samples (21 -52 159 159 -52 21) */
+                temp = c21*(((float)(dst422[im2][j]))+((float)(dst422[ip3][j])))
+                -c52*(((float)(dst422[im1][j]))+((float)(dst422[ip2][j])))
+                +c159*(((float)(dst422[i][j]))+((float)(dst422[ip1][j])))+0.5;
+                if(temp>maxCV)temp = maxCV;
+                if(temp<minCV)temp = minCV;
+                dst[i2+1][j] = (unsigned short)temp;
+                
+            }
+            
+        }
+        
+        
+    }
+    
+}
+        
+        
+
+// convert color difference (YCbCr, YDzDx) or itentity (GBR, YZX) to primaries 
+void matrix_to_primaries( )
+{
+            
+            
+}
+
+        
+        
+        
+        
 

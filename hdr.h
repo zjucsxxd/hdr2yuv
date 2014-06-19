@@ -60,11 +60,11 @@ static struct type_info_t output_file_types[] =
 {
     { OUTPUT_FILE_TYPE_UNDEFINED, "UNDEFINED", 0 },
     { OUTPUT_FILE_TYPE_YUV, "yuv", 1 },
-    { OUTPUT_FILE_TYPE_TIFF, "tiff", 0 },
+    { OUTPUT_FILE_TYPE_TIFF, "tiff", 1 },
     { OUTPUT_FILE_TYPE_EXR, "exr", 1 },
     { OUTPUT_FILE_TYPE_Y4M, "y4m", 0 },
     { OUTPUT_FILE_TYPE_DPX, "dpx", 1 },
-    { OUTPUT_FILE_TYPE_RGB, "rgb", 0 }
+    { OUTPUT_FILE_TYPE_RGB, "rgb", 1 }
 };
 
 
@@ -267,6 +267,7 @@ typedef struct
 {
     char *src_filename;
     char *dst_filename;
+    char *ref_filename;
     int verbose_level;
     int src_start_frame;
     int n_frames;
@@ -282,7 +283,10 @@ typedef struct
     // SMPTE 2050 types
     
     int input_file_type;
+    int ref_file_type;
     int output_file_type;
+    
+    int sigma_compare;
     
 } user_args_t;
 
@@ -416,10 +420,12 @@ int write_exr_file( char *filename, int pic_width, int pic_height, int half_floa
 int convert( pic_t *out_pic, hdr_t *h, pic_t *in_pic );
 int write_yuv(  char *filename, hdr_t *h, pic_t *in_pic, int src_bit_depth );
 int matrix_convert( pic_t *out_pic, hdr_t *h, pic_t *in_pic );
+int matrix_inverse( pic_t *out_pic, hdr_t *h, pic_t *in_pic );
+
 
 // tiff.cpp
 int read_tiff( pic_t *tif_pic, char* filename, hdr_t *h );
-
+int write_tiff(  char* filename, hdr_t *h, pic_t *pic, int src_bit_depth );
 // dpx.cpp from Gary Demos
 void dpx_write_float(char *outname, float *pixel_result, short width, short height);
 void dpx_read (char *inname, float **pixels_read, short *width, short *height, short cineon, short half_flag);

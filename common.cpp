@@ -199,18 +199,11 @@ int init_pic( pic_t *pic, int width, int height, int chroma_format_idc, int bit_
     
     set_pic_clip( pic );
     
-    
-#if 0
-    if( verbose_level > 2 )
-    {
-        printf("init_pic(%s): width(%d) height(%d) buf_type(%d) chroma_format(%d) bit_depth(%d)\n", pic->name, pic->width, pic->height, pic->pic_buffer_type, pic->chroma_format_idc, pic->bit_depth );
-        
-    }
-#endif
+
     
     if( verbose_level > 2 )
-        printf("intializing picture (%s):  w(%d) h(%d) depth(%d) type(%d: %s) chroma_format_idc(%d) depth(%d)\n",
-               pic->name, pic->width, pic->height, pic->bit_depth, pic->pic_buffer_type, pic->pic_buffer_type == PIC_TYPE_F32 ? "F32" : "U16", pic->chroma_format_idc, pic->bit_depth);
+        printf("intializing picture (%s):  w(%d) h(%d) d(%d) b(%d: %s) c(%d) f(%d) m(%d) t(%d) p(%d) l(%d) \n",
+               pic->name, pic->width, pic->height, pic->bit_depth, pic->pic_buffer_type, pic->pic_buffer_type == PIC_TYPE_F32 ? "F32" : "U16", pic->chroma_format_idc, pic->video_full_range_flag, pic->matrix_coeffs, pic->transfer_characteristics, pic->colour_primaries, pic->chroma_sample_loc_type );
     
     if( width < 1 || width > 10000 || height < 1 || height > 10000 )
         printf("init_pic(%s) ERROR: picture dimensions( %d x %d) out of bounds\n ",name,  width, height );

@@ -61,8 +61,11 @@ int parse_options( hdr_t *h, int argc,  char *argv[] )
     h->out_pic.chroma_format_idc = h->out_pic.chroma_sample_loc_type = h->out_pic.video_full_range_flag = -1;
     h->out_pic.transfer_characteristics = h->out_pic.matrix_coeffs = h->out_pic.colour_primaries = -1;
     
+    par->sigma_compare = 0;
+    
     int src_filename_parsed = 0;
     int dst_filename_parsed = 0;
+    int ref_filename_parsed = 0;
     
     // default values overriden first by parse_options() then read_tiff() or exr
  
@@ -83,6 +86,17 @@ int parse_options( hdr_t *h, int argc,  char *argv[] )
         {
             par->dst_filename = argv[i+1];
             dst_filename_parsed++;
+            i++;
+        }
+        else if( !strcmp( argv[i], "--ref_filename") && (i<argc) )
+        {
+            par->ref_filename = argv[i+1];
+            ref_filename_parsed++;
+            i++;
+        }
+        else if( !strcmp( argv[i], "--sigma_compare") && (i<argc) )
+        {
+            par->sigma_compare = atoi( argv[i+1] );
             i++;
         }
         else if( !strcmp( argv[i], "--src_pic_width") && (i<argc) )
@@ -330,33 +344,42 @@ int parse_options( hdr_t *h, int argc,  char *argv[] )
         }
     
     }
-    else if ( par->input_file_type == INPUT_FILE_TYPE_EXR )
+    else
     {
         h->in_pic.pic_buffer_type = PIC_TYPE_F32;
-
-        if( h->in_pic.bit_depth != 16 && h->in_pic.bit_depth != 32 )
-        {
-            printf("WARNING: src bit_depth(%d) must be 16 or 32 bits for float input file type(%s)\n",
-                   h->in_pic.bit_depth, input_file_types[par->input_file_type].name );
-
-            if( h->in_pic.half_float_flag )
-                h->in_pic.bit_depth = 32;
-            else
-                h->in_pic.bit_depth = 16;
-        }
         
-    }
-    else if ( par->input_file_type == INPUT_FILE_TYPE_DPX )
-    {
-        h->in_pic.pic_buffer_type = PIC_TYPE_F32;
-        if(  h->in_pic.bit_depth != 32 )
+        if( h->in_pic.chroma_format_idc != CHROMA_444 ){
+            printf("file-type is 4:4:4.  Settig chroma_format_idc(%d) to  %d.\n",
+                   h->in_pic.chroma_format_idc , CHROMA_444 );
+            h->in_pic.chroma_format_idc = CHROMA_444;
+        }
+
+        
+        if ( par->input_file_type == INPUT_FILE_TYPE_DPX )
         {
-            printf("WARNING: src bit_depth(%d) must be 16 or 32 bits for float input file type(%s)\n",
-                   h->in_pic.bit_depth, input_file_types[par->input_file_type].name );
+            if( h->in_pic.bit_depth != 16 && h->in_pic.bit_depth != 32 )
+            {
+                printf("WARNING: src bit_depth(%d) must be 16 or 32 bits for float input file type(%s)\n",
+                       h->in_pic.bit_depth, input_file_types[par->input_file_type].name );
             
-            h->in_pic.bit_depth = 32;
+                if( h->in_pic.half_float_flag )
+                    h->in_pic.bit_depth = 32;
+                else
+                    h->in_pic.bit_depth = 16;
+            }
+      
         }
+        else if ( par->input_file_type == INPUT_FILE_TYPE_DPX )
+        {
+            if(  h->in_pic.bit_depth != 32 )
+            {
+                printf("WARNING: src bit_depth(%d) must be 16 or 32 bits for float input file type(%s)\n",
+                       h->in_pic.bit_depth, input_file_types[par->input_file_type].name );
+            
+                h->in_pic.bit_depth = 32;
+            }
         
+        }
     }
     
     
@@ -416,6 +439,31 @@ int parse_options( hdr_t *h, int argc,  char *argv[] )
         
     }
     
+    if( par->ref_filename != NULL )
+    {
+    
+        ext = get_filename_extension( par->ref_filename );
+
+    
+        for(int i=0; i<INPUT_FILE_TYPE_LAST; i++ )
+        {
+            if( !strcasecmp( ext, input_file_types[i].name ))
+                par->ref_file_type = input_file_types[i].idx;
+        }
+ 
+        if( input_file_types[ par->ref_file_type].is_supported != 1 )
+        {
+            printf("WARNING: ref file (%s) type extension (%s) idx(%d) is either not recongized or not supported\n", par->ref_filename, ext,  par->ref_file_type );
+            arg_errors++;
+        }
+        
+    }
+    
+    
+ 
+    
+    
+    
     // beginning of sanity checks..
     if( par->src_start_frame != 0 &&
        (par->input_file_type != INPUT_FILE_TYPE_YUV && par->input_file_type != INPUT_FILE_TYPE_RGB
@@ -462,6 +510,11 @@ int parse_options( hdr_t *h, int argc,  char *argv[] )
     printf("src_start_frame: %d\n", par->src_start_frame);
     printf("n_frames: %d\n",        par->n_frames);
     
+
+    if( par->ref_filename != NULL )
+    {
+        printf("ref_filename: %s (type: %s) %s\n",    par->ref_filename, input_file_types[ par->ref_file_type].name, input_file_types[ par->ref_file_type].is_supported ?  "(SUPPORTED)" :  "(NOT SUPPORTED)"   );
+    }
     
     if( h->in_pic.width < 2 || h->in_pic.width > 10000 ){
         printf("WARNING: pic_width(%d) outside range [0,10000]\n", h->in_pic.width );
@@ -477,10 +530,13 @@ int parse_options( hdr_t *h, int argc,  char *argv[] )
         printf("WARNING: src bit_depth(%d) outside range [8,32]\n", h->in_pic.bit_depth );
         arg_errors++;
     }
+   
+
+    // TODO: if tiff, exr, dpx, rgb: automatically set this
     
     if( h->in_pic.chroma_format_idc != CHROMA_444 ){
         printf("WARNING: chroma_format_idc(%d) not %d, Only 4:4:4 input supported at this moment..\n",
-               CHROMA_444, h->in_pic.chroma_format_idc );
+               h->in_pic.chroma_format_idc , CHROMA_444 );
         arg_errors++;
     }
     
@@ -553,7 +609,14 @@ void read_planar_integer_file( pic_t *dst, char *filename, int file_type, int st
       exit(0);
     }
 
+    
     FILE *in_file_ptr  = fopen( filename, "rb" );
+    
+    if( in_file_ptr == NULL )
+    {
+        printf("ERROR, read_planar_integer_file(): unable to open file %s\n", filename );
+        exit(1);
+    }
     
     int size = y_size + 2 * c_size;
     
@@ -592,12 +655,107 @@ void read_planar_integer_file( pic_t *dst, char *filename, int file_type, int st
     fclose( in_file_ptr );
 }
 
-// TODO: y4m, hist, write openxr,  psnr, check video range, ...
+// TODO: y4m, hist, psnr, check video range, ...
 
 // TODO: move init_pic() into common.   Make all read routines (read_exr, read_tiff, etc.) use it
 
+int read_file( pic_t *in_pic,  hdr_t *h )
+{
+   
+    user_args_t *ua = &(h->user_args);
+    
+    if( ua->input_file_type == INPUT_FILE_TYPE_RGB || ua->input_file_type == INPUT_FILE_TYPE_YUV)
+    {
+        
+        //          if( in_pic->matrix_coeffs != MATRIX_GBR )
+        //            printf("reading .rgb file (%s):  setting input picture matrix_coef=%d (MATRIX_GBR)", ua->src_filename,
+        //MATRIX_GBR  );
+        
+        if( in_pic->chroma_format_idc != CHROMA_444 )
+            printf("reading .rgb or .yuv file (%s):  setting input picture chroma_format_idc=%d (CHROMA_444)", ua->src_filename, CHROMA_444  );
+        
+        if( ua->input_file_type == INPUT_FILE_TYPE_RGB ){
+            if( in_pic->matrix_coeffs != MATRIX_GBR ){
+                printf("WARNING: RGB src matrix_coefs(%d) being overriden to MATRIX_GBR (%d)\n", in_pic->matrix_coeffs, MATRIX_GBR );
+                in_pic->matrix_coeffs = MATRIX_GBR ;
+            }
+            if( in_pic->chroma_format_idc != CHROMA_444 ){
+                printf("WARNING: RGB src chroma_format_idc(%d) being overriden to CHROMA_444 (%d)\n", in_pic->chroma_format_idc, CHROMA_444 );
+                in_pic->chroma_format_idc = CHROMA_444 ;
+            }
+        }
+        
+        init_pic( in_pic, in_pic->width, in_pic->height, in_pic->chroma_format_idc, in_pic->bit_depth, in_pic->video_full_range_flag,
+                 in_pic->colour_primaries, in_pic->transfer_characteristics, in_pic->matrix_coeffs, in_pic->chroma_sample_loc_type,
+                 PIC_TYPE_U16, 0, ua->verbose_level, "in_pic" );
+        
+        
+        // TODO: derive attributes (size, chroma_format, bitdepth) from filename
+        //   check x264 convention matches vooya.de
+        
+        // add .yuv next
+        read_planar_integer_file( in_pic, ua->src_filename, ua->input_file_type, ua->src_start_frame, ua->verbose_level );
+        
+    }
+    else if( ua->input_file_type == INPUT_FILE_TYPE_DPX )
+    {
+        float *tmp_dpx_pic;
+        short dpx_width, dpx_height;
+        short cineon = 0;
+        //         short half_flag = 0;
+        
+        if( in_pic->matrix_coeffs != MATRIX_GBR )
+            printf("reading .dpx file (%s):  setting input picture matrix_coef=%d (MATRIX_GBR)", ua->src_filename, MATRIX_GBR  );
+        
+        if( in_pic->chroma_format_idc != CHROMA_444 )
+            printf("reading .dpx file (%s):  setting input picture chroma_format_idc=%d (CHROMA_444)", ua->src_filename, CHROMA_444  );
+        
+        if( in_pic->video_full_range_flag != 1 )
+            printf("reading .dpx file (%s):  setting input picture video_full_range_flag to 1", ua->src_filename );
+        
+        // dpx_read() initlaizes tmp_dpx_pic
+        dpx_read ( ua->src_filename, &tmp_dpx_pic, &dpx_width, &dpx_height, cineon, in_pic->half_float_flag );
+        
+        
+        
+        
+        //      pic_width = dpx_width;
+        //    pic_height = dpx_height;
+        
+        //        printf("read dpx file: width(%d) height(%d)\n", pic_width, pic_height );
+        
+        in_pic->matrix_coeffs = MATRIX_GBR;
+        in_pic->chroma_format_idc = CHROMA_444;
+        
+        init_pic( in_pic, dpx_width, dpx_height, CHROMA_444, 32,  in_pic->video_full_range_flag,
+                 in_pic->colour_primaries, in_pic->transfer_characteristics, in_pic->matrix_coeffs, in_pic->chroma_sample_loc_type,
+                 PIC_TYPE_F32, 0, ua->verbose_level, "in_pic from dpx"  );
+        
+        
+        muxed_dpx_to_planar_float_buf( in_pic, dpx_width, dpx_height, tmp_dpx_pic );
+        free( tmp_dpx_pic );
+        
+        if( ua->verbose_level > 0 )
+            printf("muxed_dpx_to_planar_float_buf\n");
+    }
+    else if( ua->input_file_type == INPUT_FILE_TYPE_EXR )
+    {
+        // read_exr() initlaizes in_pic
+        read_exr( in_pic, ua->src_filename );
+        
+        if( in_pic->video_full_range_flag != 1 )
+            printf("reading .exr file (%s):  setting input picture video_full_range_flag to 1", ua->src_filename );
+    } else if( ua->input_file_type == INPUT_FILE_TYPE_TIFF ){
+        
+        // read_tiff() initlaizes in_pic
+        read_tiff( in_pic, ua->src_filename, h );
+    }
+    
+    return(0);
+    
+}
 
-int main (int argc, char *argv[])
+int main (int argc, char *argv[] )
 {
     hdr_t h;
     user_args_t *ua = &(h.user_args);
@@ -630,171 +788,50 @@ int main (int argc, char *argv[])
         tmp_pic->chroma_sample_loc_type = out_pic->chroma_sample_loc_type;
 
         
-       // exr_test((char *)"Market3_1920x1080p_50_hf_709_00000.exr");
-        //       exr_test( &exr_pic, (char *)"Seine_1920x1080p_25_hf_709_00000_rrtd_tmp.exr" );
-        if( ua->input_file_type == INPUT_FILE_TYPE_RGB || ua->input_file_type == INPUT_FILE_TYPE_YUV)
+        if( ua->input_file_type != 0 )
         {
-
-  //          if( in_pic->matrix_coeffs != MATRIX_GBR )
-    //            printf("reading .rgb file (%s):  setting input picture matrix_coef=%d (MATRIX_GBR)", ua->src_filename,
-            //MATRIX_GBR  );
-
-            if( in_pic->chroma_format_idc != CHROMA_444 )
-                printf("reading .rgb or .yuv file (%s):  setting input picture chroma_format_idc=%d (CHROMA_444)", ua->src_filename, CHROMA_444  );
-            
-            if( ua->input_file_type == INPUT_FILE_TYPE_RGB ){
-                if( in_pic->matrix_coeffs != MATRIX_GBR ){
-                    printf("WARNING: RGB src matrix_coefs(%d) being overriden to MATRIX_GBR (%d)\n", in_pic->matrix_coeffs, MATRIX_GBR );
-                    in_pic->matrix_coeffs = MATRIX_GBR ;
-                }
-                if( in_pic->chroma_format_idc != CHROMA_444 ){
-                    printf("WARNING: RGB src chroma_format_idc(%d) being overriden to CHROMA_444 (%d)\n", in_pic->chroma_format_idc, CHROMA_444 );
-                    in_pic->chroma_format_idc = CHROMA_444 ;
-                }
-            }
-            
-            init_pic( in_pic, in_pic->width, in_pic->height, in_pic->chroma_format_idc, in_pic->bit_depth, in_pic->video_full_range_flag,
-                     in_pic->colour_primaries, in_pic->transfer_characteristics, in_pic->matrix_coeffs, in_pic->chroma_sample_loc_type,
-                     PIC_TYPE_U16, 0, ua->verbose_level, "in_pic" );
-
-            
-            // TODO: derive attributes (size, chroma_format, bitdepth) from filename
-            //   check x264 convention matches vooya.de
-            
-            // add .yuv next
-            read_planar_integer_file( in_pic, ua->src_filename, ua->input_file_type, ua->src_start_frame, ua->verbose_level );
+            read_file( in_pic,  &h );
         
             // TODO: check that range indicated by full_range_flag is being observed
-            
-            pic_stats( in_pic, &(in_pic->stats), 1 );
-            
 
-            init_pic( tmp_pic, in_pic->width, in_pic->height, in_pic->chroma_format_idc, in_pic->bit_depth, in_pic->video_full_range_flag,
-                     out_pic->colour_primaries, out_pic->transfer_characteristics, out_pic->matrix_coeffs, in_pic->chroma_sample_loc_type,
-                     out_pic->pic_buffer_type, 0, ua->verbose_level, ".rgb --> mati" );
-            
-         
-            matrix_convert(  tmp_pic, &h, in_pic );
-            
-            pic_stats( tmp_pic, &(tmp_pic->stats), 1 );
-            
-            
+            pic_stats( in_pic, &(in_pic->stats), 1 );
         }
-        else if( ua->input_file_type == INPUT_FILE_TYPE_DPX )
+        
+
+        if( ua->input_file_type != 0 )
         {
-            float *tmp_dpx_pic;
-            short dpx_width, dpx_height;
-            short cineon = 0;
-   //         short half_flag = 0;
-
-            if( in_pic->matrix_coeffs != MATRIX_GBR )
-                printf("reading .dpx file (%s):  setting input picture matrix_coef=%d (MATRIX_GBR)", ua->src_filename, MATRIX_GBR  );
+            int tmp_bit_depth;
             
-            if( in_pic->chroma_format_idc != CHROMA_444 )
-                printf("reading .dpx file (%s):  setting input picture chroma_format_idc=%d (CHROMA_444)", ua->src_filename, CHROMA_444  );
- 
-            if( in_pic->video_full_range_flag != 1 )
-                printf("reading .dpx file (%s):  setting input picture video_full_range_flag to 1", ua->src_filename );
+            if( out_pic->pic_buffer_type == in_pic->pic_buffer_type )
+                tmp_bit_depth = in_pic->bit_depth;
+            else
+                tmp_bit_depth = out_pic->bit_depth;
             
-            // dpx_read() initlaizes tmp_dpx_pic
-            dpx_read ( ua->src_filename, &tmp_dpx_pic, &dpx_width, &dpx_height, cineon, in_pic->half_float_flag );
-
-            
-#if 0
-            dst_pic->bit_depth = 32;
-            dst_pic->chroma_sample_loc_type = 0;
-            dst_pic->transfer_characteristics = TRANSFER_LINEAR;
-            dst_pic->colour_primaries = COLOR_PRIMARY_BT709;
-            dst_pic->video_full_range_flag = 1;
-            dst_pic->matrix_coeffs = MATRIX_GBR;
-#endif
-            
-      //      pic_width = dpx_width;
-        //    pic_height = dpx_height;
-
-    //        printf("read dpx file: width(%d) height(%d)\n", pic_width, pic_height );
-            
-            in_pic->matrix_coeffs = MATRIX_GBR;
-            in_pic->chroma_format_idc = CHROMA_444;
-
-            init_pic( in_pic, dpx_width, dpx_height, CHROMA_444, 32,  in_pic->video_full_range_flag,
-                     in_pic->colour_primaries, in_pic->transfer_characteristics, in_pic->matrix_coeffs, in_pic->chroma_sample_loc_type,
-                     PIC_TYPE_F32, 0, ua->verbose_level, "in_pic from dpx"  );
-
-            
-            muxed_dpx_to_planar_float_buf( in_pic, dpx_width, dpx_height, tmp_dpx_pic );
-            free( tmp_dpx_pic );
-
-            pic_stats( in_pic, &(in_pic->stats), 1 );
-
-            if( ua->verbose_level > 0 )
-                printf("muxed_dpx_to_planar_float_buf\n");
-
-  //          init_pic( tmp_pic, dpx_width, dpx_height, CHROMA_444, 32,  in_pic->video_full_range_flag,
-    //                 in_pic->colour_primaries, in_pic->transfer_characteristics, in_pic->matrix_coeffs, in_pic->chroma_sample_loc_type,
-      //               PIC_TYPE_F32, 0, ua->verbose_level, "tmp_pic from dpx"  );
-
-            init_pic( tmp_pic, in_pic->width, in_pic->height, in_pic->chroma_format_idc, out_pic->bit_depth, out_pic->video_full_range_flag,
-                     out_pic->colour_primaries, out_pic->transfer_characteristics, out_pic->matrix_coeffs, in_pic->chroma_sample_loc_type,
-                     out_pic->pic_buffer_type, 0, ua->verbose_level, ".dpx --> mati" );
-            
-       //     if( ua->output_file_type != OUTPUT_FILE_TYPE_EXR )
-            {
-                if( ua->verbose_level > 0 )
-                    printf("matrix_convert of DPX input\n");
-                
-                matrix_convert( tmp_pic, &h, in_pic );
-            }
-            
-            pic_stats( tmp_pic, &(tmp_pic->stats), 1 );
-          
-           
-       }
-       else if( ua->input_file_type == INPUT_FILE_TYPE_EXR )
-       {
-   //        int half_flag = 0;  // internal processing always 32-bits
-       
-           // read_exr() initlaizes in_pic
-            read_exr( in_pic, ua->src_filename );
- 
-           if( in_pic->video_full_range_flag != 1 )
-               printf("reading .exr file (%s):  setting input picture video_full_range_flag to 1", ua->src_filename );
-           
-           
-           pic_stats( in_pic, &(in_pic->stats), 1 );
-
-           
- //          init_pic( tmp_pic, in_pic->width, in_pic->height, CHROMA_444, 32,  in_pic->video_full_range_flag,
-   //                 in_pic->colour_primaries, in_pic->transfer_characteristics, in_pic->matrix_coeffs, in_pic->chroma_sample_loc_type,
-     //               PIC_TYPE_F32, 0, ua->verbose_level, "in_pic from exr"  );
-
-           init_pic( tmp_pic, in_pic->width, in_pic->height, in_pic->chroma_format_idc, out_pic->bit_depth, out_pic->video_full_range_flag,
-                    out_pic->colour_primaries, out_pic->transfer_characteristics, out_pic->matrix_coeffs, in_pic->chroma_sample_loc_type,
-                    out_pic->pic_buffer_type, 0, ua->verbose_level, ".exr --> mati" );
-           
-           matrix_convert( tmp_pic, &h, in_pic );
-           
-           pic_stats( tmp_pic, &(tmp_pic->stats), 1 );
-
- 
-        } else if( ua->input_file_type == INPUT_FILE_TYPE_TIFF ){
-
-            // read_tiff() initlaizes in_pic
-            
-            read_tiff( in_pic, ua->src_filename, &h );
-            pic_stats( in_pic, &(in_pic->stats), 1 );
-            
-            init_pic( tmp_pic, in_pic->width, in_pic->height, in_pic->chroma_format_idc, in_pic->bit_depth,  out_pic->video_full_range_flag,
+            init_pic( tmp_pic, in_pic->width, in_pic->height, in_pic->chroma_format_idc, tmp_bit_depth,  out_pic->video_full_range_flag,
                      out_pic->colour_primaries, out_pic->transfer_characteristics, out_pic->matrix_coeffs, out_pic->chroma_sample_loc_type,
                      out_pic->pic_buffer_type, 0, ua->verbose_level, "tmp_pic from tiff"  );
-
-            
-            matrix_convert( tmp_pic, &h,  in_pic );
-            
+        }
+        
+        if( ua->input_file_type != 0 )
+        {
+        
+            if( ua->input_file_type == INPUT_FILE_TYPE_YUV && ua->output_file_type == OUTPUT_FILE_TYPE_TIFF )
+                matrix_inverse( tmp_pic, &h,  in_pic );
+            else
+                matrix_convert( tmp_pic, &h,  in_pic );
+        
             pic_stats( tmp_pic, &(tmp_pic->stats), 1 );
-
         }
  
+        // TODO: SNR, etc. computation on orig vs. decoded
+        if( ua->ref_filename != NULL )
+        {
+        
+            
+            
+        }
+        
+        
         
         if( ua->dst_filename != NULL ){
             
@@ -890,6 +927,10 @@ int main (int argc, char *argv[])
             if( ua->output_file_type == OUTPUT_FILE_TYPE_YUV && out_pic->pic_buffer_type == PIC_TYPE_U16 ){
                 write_yuv( ua->dst_filename, &h,  out_pic, tmp_pic->bit_depth );
                 pic_stats( out_pic, &(out_pic->stats), 1 );
+            }
+            else if( ua->output_file_type == OUTPUT_FILE_TYPE_TIFF && out_pic->pic_buffer_type == PIC_TYPE_U16 )
+            {
+                write_tiff(  ua->dst_filename, &h,  out_pic, tmp_pic->bit_depth );
             }
             else if( ua->output_file_type == OUTPUT_FILE_TYPE_DPX && out_pic->pic_buffer_type == PIC_TYPE_F32 )
             {

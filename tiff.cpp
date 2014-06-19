@@ -555,10 +555,106 @@ int write_yuv( char *filename, hdr_t *h, pic_t *pic, int src_bit_depth )
     
 }
 
-#if 0
-// Open Binary PlanarYUV file for writing:
+
+int write_tiff(  char* filename, hdr_t *h, pic_t *pic, int src_bit_depth )
+{
+    short ALPHA = 0; // no alpha channel is default
+    short numChan ; // only 3 channels rgb with no alpha
+    
+    short SR = pic->bit_depth - src_bit_depth;
+    
+    float avg_R = 0.0;
+    float avg_G = 0.0;
+    float avg_B = 0.0;
+    
+    TIFF* tif = TIFFOpen(filename, "w");
+    
+    if( tif == NULL )
+    {
+        printf("unable to open %s.  Exiting\n", filename );
+        exit(0);
+    }
+    
+    if(ALPHA){
+        TIFFSetField(tif, TIFFTAG_SAMPLESPERPIXEL, 4);
+        numChan = 4;
+    } else {
+        TIFFSetField(tif, TIFFTAG_SAMPLESPERPIXEL, 3);
+        numChan = 3;
+    }
+    
+		
+    TIFFSetField(tif, TIFFTAG_BITSPERSAMPLE, 16);
+    TIFFSetField(tif, TIFFTAG_PLANARCONFIG, PLANARCONFIG_CONTIG);
+    TIFFSetField(tif, TIFFTAG_IMAGEWIDTH, pic->width);
+    TIFFSetField(tif, TIFFTAG_IMAGELENGTH, pic->height );
+    TIFFSetField(tif, TIFFTAG_ROWSPERSTRIP, 1);
+    TIFFSetField(tif, TIFFTAG_PHOTOMETRIC, PHOTOMETRIC_RGB);
+ 
+    // set output line array to unsigned short
+    unsigned short *Line =  (unsigned short *)malloc( numChan * pic->width *sizeof(unsigned short));
+    
+    int n= 0;
+    for (int line = 0;line < pic->height;line++)
+    {
+        int addr = line * pic->width;
+            
+        for (unsigned int pixel = 0; pixel < pic->width; pixel++ )
+        {
+                
+            int G = pic->buf[0][ addr + pixel ];
+            
+            int B = pic->buf[1][ addr + pixel ];
+            int R = pic->buf[2][ addr + pixel ];
+            
+            
+            R = R << SR;
+            G = G << SR;
+            B = B << SR;
+            
+            avg_R += R;
+            avg_G += G;
+            avg_B += B;
+            
+            n++;
+            
+                // R = X = 2*Dx + Y
+            Line[pixel*numChan + 0] = (unsigned short) R;     // R = X
+				
+				// G = Y
+            Line[pixel*numChan + 1] = (unsigned short) G;  //G = Y or inverse 2020/709 equation
+				
+				// B = X = 2*Dx + Y
+            Line[pixel*numChan + 2] = (unsigned short) B;   // B = Z
+				
+            // A
+            if(ALPHA)
+                Line[pixel*numChan+3] = 65535;  // A
+                
+                //printf("Rp=%d   Gp=%d   Bp=%d | ",Line[pixel],Line[pixel+1],Line[pixel+2]);
+                
+			}
+			
+            
+  			//printf("Writing strip %d with width %d bytes %d pixels\n",line,4*arraySizeX*2,arraySizeX);
+			TIFFWriteRawStrip(tif, (tstrip_t)line, (tdata_t)Line, 2 * numChan * pic->width );
+            
+		}
+		
+
+    printf( "write_tiff(): avg R(%f) G(%f) B(%f)\n", avg_R / n, avg_G / n, avg_B / n );
+    
+    TIFFClose(tif);
+
+    free( Line );
+
+    return(0);
+}
 
 
-#endif
+
+
+
+
 
 
